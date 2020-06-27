@@ -1,0 +1,9 @@
+{
+  "private": true,
+  "dependencies": {
+    "file-api": "^0.10.4",
+    "node-fetch": "^2.6.0",
+    "rss-parser": "^3.8.0",
+    "twitter-lite": "^0.14.0"
+  }
+}
