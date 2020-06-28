@@ -1,19 +1,27 @@
-const { readFileSync, writeFileSync } = require('fs');
-const { File, FileReader } = require('file-api');
-const fetch = require('node-fetch');
-const Parser = require('rss-parser');
-const Twitter = require('twitter-lite');
+import { readFileSync, writeFileSync } from 'fs';
+import { File, FileReader } from 'file-api';
+import fetch from 'node-fetch';
+import Parser from 'rss-parser';
+import Twitter from 'twitter-lite';
 
 require.extensions['.txt'] = function (module, filename) {
   module.exports = readFileSync(filename, 'utf8');
 };
 
+interface Womp {
+  id: number
+  author: string
+  location: string
+  content: string
+  playUrl: string
+  imgSrc: string
+}
+
 let lastWompId = Number(require('./last_womp_id.txt'));
 
-const updateLastWomp = (womp) => {
-  const { id } = womp;
-  lastWompId = id;
-  writeFileSync('./last_womp_id.txt', id);
+const updateLastWomp = (womp: Womp) => {
+  lastWompId = womp.id;
+  writeFileSync('./last_womp_id.txt', String(womp.id));
 };
 
 const secrets = {
@@ -30,12 +38,12 @@ const uploadClient = new Twitter({
   ...secrets,
 });
 
-const textForTweet = (womp) => {
+const textForTweet = (womp: Womp) => {
   const { content, location, author, playUrl } = womp;
   return `“${content}” - at ${location} - by ${author} ${playUrl}`;
 };
 
-const base64Image = async (womp) => {
+const base64Image = async (womp: Womp): Promise<string> => {
   return await new Promise(async (resolve) => {
     const response = await fetch(womp.imgSrc);
     const blob = await response.blob();
@@ -43,10 +51,7 @@ const base64Image = async (womp) => {
     reader.onload = function (ev) {
       const base64Image = ev.target.result;
       // Format to satisfy Twitter API
-      const formattedBase64Image = base64Image.replace(
-        /^data:image\/jpeg;base64,/,
-        ''
-      );
+      const formattedBase64Image = base64Image.replace(/^data:image\/jpeg;base64,/, '');
       resolve(formattedBase64Image);
     };
     reader.readAsDataURL(
@@ -59,7 +64,7 @@ const base64Image = async (womp) => {
   });
 };
 
-const tweetWomp = async (womp) => {
+const tweetWomp = async (womp: Womp) => {
   try {
     // Fetch and upload image
     const mediaUploadResponse = await uploadClient.post('media/upload', {
@@ -68,7 +73,7 @@ const tweetWomp = async (womp) => {
 
     // Add alt text
     const { content } = womp;
-    if (content && content !== '') {
+    if (Boolean(content)) {
       await uploadClient.post('media/metadata/create', {
         media_id: mediaUploadResponse.media_id_string,
         alt_text: { text: content },
@@ -82,13 +87,15 @@ const tweetWomp = async (womp) => {
     });
 
     console.log(`Tweeted womp #${womp.id}: ${textForTweet(womp)}`);
+
   } catch (error) {
     console.error(error);
   }
+
   updateLastWomp(womp);
 };
 
-const truncate = (str, length = 140, ending = '…') => {
+const truncate = (str: string, length = 140, ending = '…') => {
   if (str.length > length) {
     return str.substring(0, length - ending.length) + ending;
   } else {
@@ -96,19 +103,20 @@ const truncate = (str, length = 140, ending = '…') => {
   }
 };
 
-const getWomps = async () => {
+const getWomps = async (): Promise<Womp[]> => {
   const parser = new Parser();
   const feed = await parser.parseURL('https://www.cryptovoxels.com/womps.rss');
   let { items } = feed;
 
-  items = items.filter((i) => Number(i.link.split('/').slice(-1)) > lastWompId);
-  items = items.reverse();
+  items = items
+    .filter((i) => Number(i.link.split('/').slice(-1)) > lastWompId)
+    .reverse();
 
   items = items.map(async (item) => {
     let { link, content: rawContent, creator, title: location } = item;
 
     const linkParts = link.split('/');
-    const id = linkParts[linkParts.length - 1];
+    const id = Number(linkParts[linkParts.length - 1]);
     const imgSrc = `https://js.cryptovoxels.com/api/womps/${id}.jpg`;
 
     const coords = rawContent.match(/coords=(.+?)\'/)[1];
@@ -123,23 +131,32 @@ const getWomps = async () => {
       { mode: 'no-cors' }
     );
     const data = await response.json();
-    const author = data.avatar && data.avatar.name ? data.avatar.name : creator;
+    const author: string = data.avatar && data.avatar.name ? data.avatar.name : creator;
 
-    return { id, content, location, author, playUrl, imgSrc };
+    const womp = { id, content, location, author, playUrl, imgSrc }
+    return womp;
   });
 
-  return await Promise.all(items);
+  const womps = await Promise.all(items) as Womp[]
+  return womps;
 };
 
-const timeout = (ms) => {
+const timeout = (ms: number) => {
   return new Promise((resolve) => setTimeout(resolve, ms));
 };
 
 (async () => {
+  console.log(`~~ womptron ~~`)
+
   const womps = await getWomps();
-  console.log(`Found ${womps.length} new womps!`);
-  for (womp of womps) {
+
+  console.log(`Found ${womps.length} new womps.`);
+
+  for (const [index, womp] of womps.entries()) {
     await tweetWomp(womp);
-    await timeout(7000);
+
+    // Wait 7s between tweets
+    if (womps[index + 1])
+      await timeout(7000);
   }
 })();
