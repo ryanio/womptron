@@ -1,14 +1,14 @@
 import { readFileSync, writeFileSync } from 'fs';
-import { File, FileReader } from 'file-api';
 import fetch from 'node-fetch';
 import Parser from 'rss-parser';
 import Twitter from 'twitter-lite';
+import { base64Image, getUniqueListBy, truncate } from './util'
 
 require.extensions['.txt'] = function (module, filename) {
   module.exports = readFileSync(filename, 'utf8');
 };
 
-interface Womp {
+export interface Womp {
   id: number
   author: string
   location: string
@@ -43,26 +43,7 @@ const textForTweet = (womp: Womp) => {
   return `“${content}” - at ${location} - by ${author} ${playUrl}`;
 };
 
-const base64Image = async (womp: Womp): Promise<string> => {
-  return await new Promise(async (resolve) => {
-    const response = await fetch(womp.imgSrc);
-    const blob = await response.blob();
-    const reader = new FileReader();
-    reader.onload = function (ev) {
-      const base64Image = ev.target.result;
-      // Format to satisfy Twitter API
-      const formattedBase64Image = base64Image.replace(/^data:image\/jpeg;base64,/, '');
-      resolve(formattedBase64Image);
-    };
-    reader.readAsDataURL(
-      new File({
-        name: `${womp.id}.jpg`,
-        type: 'image/jpeg',
-        buffer: Buffer.from(await blob.arrayBuffer()),
-      })
-    );
-  });
-};
+
 
 const tweetWomp = async (womp: Womp) => {
   try {
@@ -95,19 +76,17 @@ const tweetWomp = async (womp: Womp) => {
   updateLastWomp(womp);
 };
 
-const truncate = (str: string, length = 140, ending = '…') => {
-  if (str.length > length) {
-    return str.substring(0, length - ending.length) + ending;
-  } else {
-    return str;
-  }
-};
+
 
 const getWomps = async (): Promise<Womp[]> => {
   const parser = new Parser();
   const feed = await parser.parseURL('https://www.cryptovoxels.com/womps.rss');
   let { items } = feed;
 
+  // unique
+  items = getUniqueListBy(items, 'content')
+
+  // since lastWompId
   items = items
     .filter((i) => Number(i.link.split('/').slice(-1)) > lastWompId)
     .reverse();
@@ -152,7 +131,7 @@ const timeout = (ms: number) => {
 
   console.log(`Found ${womps.length} new womps.`);
 
-  for (const [index, womp] of womps.entries()) {
+  for (const [index, womp] of womps.slice(0, 3).entries()) {
     await tweetWomp(womp);
 
     // Wait 7s between tweets
