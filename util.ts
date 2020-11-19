@@ -1,17 +1,6 @@
+import fetch from 'node-fetch';
 import { File, FileReader } from 'file-api';
 import { Womp } from './index';
-
-export function getUniqueListBy(arr, key) {
-    return [...new Map(arr.map(item => [item[key], item])).values()]
-}
-
-export function truncate(str: string, length = 140, ending = '…') {
-    if (str.length > length) {
-        return str.substring(0, length - ending.length) + ending;
-    } else {
-        return str;
-    }
-};
 
 export async function base64Image(womp: Womp): Promise<string> {
     return await new Promise(async (resolve) => {
@@ -33,3 +22,20 @@ export async function base64Image(womp: Womp): Promise<string> {
         );
     });
 };
+
+export function getUniqueListBy(arr, key) {
+    return [...new Map(arr.map(item => [item[key], item])).values()]
+}
+
+export function timeout(ms: number) {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+};
+
+export function truncate(str: string, length = 140, ending = '…') {
+    if (str.length > length) {
+        return str.substring(0, length - ending.length) + ending;
+    } else {
+        return str;
+    }
+};
+

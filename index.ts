@@ -2,11 +2,7 @@ import { readFileSync, writeFileSync } from 'fs';
 import fetch from 'node-fetch';
 import Parser from 'rss-parser';
 import Twitter from 'twitter-lite';
-import { base64Image, getUniqueListBy, truncate } from './util'
-
-require.extensions['.txt'] = function (module, filename) {
-  module.exports = readFileSync(filename, 'utf8');
-};
+import { base64Image, getUniqueListBy, timeout, truncate } from './util'
 
 export interface Womp {
   id: number
@@ -17,7 +13,7 @@ export interface Womp {
   imgSrc: string
 }
 
-let lastWompId = Number(require('./last_womp_id.txt'));
+let lastWompId = Number(readFileSync('./last_womp_id.txt'));
 
 const updateLastWomp = (womp: Womp) => {
   lastWompId = womp.id;
@@ -42,8 +38,6 @@ const textForTweet = (womp: Womp) => {
   const { content, location, author, playUrl } = womp;
   return `“${content}” - at ${location} - by ${author} ${playUrl}`;
 };
-
-
 
 const tweetWomp = async (womp: Womp) => {
   try {
@@ -75,8 +69,6 @@ const tweetWomp = async (womp: Womp) => {
 
   updateLastWomp(womp);
 };
-
-
 
 const getWomps = async (): Promise<Womp[]> => {
   const parser = new Parser();
@@ -118,10 +110,6 @@ const getWomps = async (): Promise<Womp[]> => {
 
   const womps = await Promise.all(items) as Womp[]
   return womps;
-};
-
-const timeout = (ms: number) => {
-  return new Promise((resolve) => setTimeout(resolve, ms));
 };
 
 (async () => {
