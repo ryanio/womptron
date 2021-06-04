@@ -3,6 +3,7 @@ import fetch from 'node-fetch';
 import Parser from 'rss-parser';
 import Twitter from 'twitter-lite';
 import { base64Image, getUniqueListBy, timeout, truncate } from './util'
+const meta = require('./meta.json')
 
 export interface Womp {
   id: number
@@ -13,11 +14,15 @@ export interface Womp {
   imgSrc: string
 }
 
-let lastWompId = Number(readFileSync('./last_womp_id.txt'));
-
 const updateLastWomp = (womp: Womp) => {
-  lastWompId = womp.id;
-  writeFileSync('./last_womp_id.txt', String(womp.id));
+  meta.lastWompId = womp.id
+  if (womp.content !== '' && !meta.lastWompContents.includes(womp.content)) {
+    meta.lastWompContents.push(womp.content)
+  }
+  if (meta.lastWompContents.length > 5) {
+    meta.lastWompContents = meta.lastWompContents.slice(1)
+  }
+  writeFileSync('./meta.json', JSON.stringify(meta));
 };
 
 const secrets = {
@@ -40,6 +45,11 @@ const textForTweet = (womp: Womp) => {
 };
 
 const tweetWomp = async (womp: Womp) => {
+  if (womp.content !== '' && meta.lastWompContents.includes(womp.content)) {
+    console.log(`Skipping womp #${womp.id} due to duplicate content`)
+    updateLastWomp(womp);
+    return
+  }
   try {
     // Fetch and upload image
     const mediaUploadResponse = await uploadClient.post('media/upload', {
@@ -80,7 +90,7 @@ const getWomps = async (): Promise<Womp[]> => {
 
   // since lastWompId
   items = items
-    .filter((i) => Number(i.link.split('/').slice(-1)) > lastWompId)
+    .filter((i) => Number(i.link.split('/').slice(-1)) > meta.lastWompId)
     .reverse();
 
   items = items.map(async (item) => {
@@ -94,6 +104,10 @@ const getWomps = async (): Promise<Womp[]> => {
     const playUrl = `https://www.cryptovoxels.com/play?coords=${coords}`;
 
     let content = rawContent.match(/<\/b>([\s\S]*?)<b>/)[1];
+
+    // remove unsoliicted mentions by removing @ symbol
+    content = content.replace(/(^|\s)@(\w*)/, '$1')
+
     content = content.trim();
     content = truncate(content);
 
