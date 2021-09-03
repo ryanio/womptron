@@ -107,6 +107,7 @@ const getWomps = async (): Promise<Womp[]> => {
 
     // remove unsoliicted mentions by removing @ symbol
     content = content.replace(/(^|\s|\n)@(\w*)/, '$1')
+    location = location.replace(/(^|\s|\n)@(\w*)/, '$1')
 
     content = content.trim();
     content = truncate(content);
