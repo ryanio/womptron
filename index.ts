@@ -44,11 +44,20 @@ const textForTweet = (womp: Womp) => {
   return `“${content}” - at ${location} - by ${author} ${playUrl}`;
 };
 
+const authorBanList = [
+  'hashnews.eth' // reason: excessive spamming of duplicate content
+];
+
 const tweetWomp = async (womp: Womp) => {
   if (womp.content !== '' && meta.lastWompContents.includes(womp.content)) {
-    console.log(`Skipping womp #${womp.id} due to duplicate content`)
+    console.log(`Skipping womp #${womp.id}: duplicate content`);
     updateLastWomp(womp);
-    return
+    return;
+  }
+  if (authorBanList.includes(womp.author)) {
+    console.log(`Skipping womp #${womp.id}: author banned`);
+    updateLastWomp(womp);
+    return;
   }
   try {
     // Fetch and upload image
