@@ -19,7 +19,7 @@ const updateLastWomp = (womp: Womp) => {
   if (womp.content !== '' && !meta.lastWompContents.includes(womp.content)) {
     meta.lastWompContents.push(womp.content)
   }
-  if (meta.lastWompContents.length > 5) {
+  if (meta.lastWompContents.length > 10) {
     meta.lastWompContents = meta.lastWompContents.slice(1)
   }
   writeFileSync('./meta.json', JSON.stringify(meta))
@@ -147,6 +147,8 @@ const getWomps = async (): Promise<Womp[]> => {
     await tweetWomp(womp)
 
     // Wait 7s between tweets
-    if (womps[index + 1]) await timeout(7000)
+    if (womps[index + 1]) {
+      await timeout(7000)
+    }
   }
 })()
