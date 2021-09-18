@@ -103,7 +103,8 @@ const getWomps = async (): Promise<Womp[]> => {
 
     const linkParts = link.split('/')
     const id = Number(linkParts[linkParts.length - 1])
-    const imgSrc = `https://js.cryptovoxels.com/api/womps/${id}.jpg`
+
+    const imgSrc = rawContent.match(/<img.*?src=(.*?) /)[1]
 
     const coords = rawContent.match(/coords=(.+?)\'/)[1]
     const playUrl = `https://www.cryptovoxels.com/play?coords=${coords}`
