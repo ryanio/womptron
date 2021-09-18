@@ -3,7 +3,7 @@ import fetch from 'node-fetch'
 import Parser from 'rss-parser'
 import Twitter from 'twitter-lite'
 import { base64Image, timeout, truncate } from './util'
-const meta = require('./meta.json')
+import meta from './meta.json'
 
 export interface Womp {
   id: number
