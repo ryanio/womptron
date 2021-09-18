@@ -6,11 +6,12 @@ jobs:
   tweet:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/setup-node@v1
+      - uses: actions/checkout@v2
+
+      - uses: actions/setup-node@v2
         with:
           node-version: 16.x
-
-      - uses: actions/checkout@v2
+          cache: 'yarn'
 
       - run: yarn
 
