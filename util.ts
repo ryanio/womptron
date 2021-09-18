@@ -26,10 +26,6 @@ export async function base64Image(womp: Womp): Promise<string> {
   })
 }
 
-export function getUniqueListBy(arr, key) {
-  return [...new Map(arr.map(item => [item[key], item])).values()]
-}
-
 export function timeout(ms: number) {
   return new Promise(resolve => setTimeout(resolve, ms))
 }

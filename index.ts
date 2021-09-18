@@ -1,8 +1,8 @@
-import { readFileSync, writeFileSync } from 'fs'
+import { writeFileSync } from 'fs'
 import fetch from 'node-fetch'
 import Parser from 'rss-parser'
 import Twitter from 'twitter-lite'
-import { base64Image, getUniqueListBy, timeout, truncate } from './util'
+import { base64Image, timeout, truncate } from './util'
 const meta = require('./meta.json')
 
 export interface Womp {
@@ -92,9 +92,6 @@ const getWomps = async (): Promise<Womp[]> => {
   const parser = new Parser()
   const feed = await parser.parseURL('https://www.cryptovoxels.com/womps.rss')
   let { items } = feed
-
-  // unique
-  items = getUniqueListBy(items, 'content')
 
   // since lastWompId
   items = items
