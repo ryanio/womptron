@@ -46,7 +46,9 @@ const textForTweet = (womp: Womp) => {
 
 const authorBanList = [
   'hashnews.eth', // reason: excessive spamming of duplicate content
-  'DawnXue' // alias of above
+  'DawnXue', // alias of above
+  '0x75a90e76c8f70ac79e8ab5726edc3520b4ed2c02', // alias of above
+  '0x3da62ff5411fe23359d7ea9cb856266a088de752', // alias of above
 ]
 
 const tweetWomp = async (womp: Womp) => {
