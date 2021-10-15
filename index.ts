@@ -145,7 +145,7 @@ const getWomps = async (): Promise<Womp[]> => {
 
   console.log(`Found ${womps.length} new womps.`)
 
-  for (const [index, womp] of womps.slice(0, 3).entries()) {
+  for (const [index, womp] of womps.slice(0, 5).entries()) {
     await tweetWomp(womp)
 
     // Wait 7s between tweets
