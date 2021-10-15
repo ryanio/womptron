@@ -93,7 +93,9 @@ const tweetWomp = async (womp: Womp) => {
 
 const getWomps = async (): Promise<Womp[]> => {
   const parser = new Parser()
-  const feed = await parser.parseURL('https://www.cryptovoxels.com/womps.rss')
+  const feed = await parser.parseURL(
+    `https://www.cryptovoxels.com/womps.rss?${Date.now()}`
+  )
   let { items } = feed
 
   // since lastWompId
