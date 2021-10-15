@@ -29,14 +29,14 @@ const secrets = {
   consumer_key: process.env.TWITTER_CONSUMER_KEY,
   consumer_secret: process.env.TWITTER_CONSUMER_SECRET,
   access_token_key: process.env.ACCESS_TOKEN,
-  access_token_secret: process.env.ACCESS_TOKEN_SECRET
+  access_token_secret: process.env.ACCESS_TOKEN_SECRET,
 }
 
 const client = new Twitter(secrets)
 
 const uploadClient = new Twitter({
   subdomain: 'upload',
-  ...secrets
+  ...secrets,
 })
 
 const textForTweet = (womp: Womp) => {
@@ -65,7 +65,7 @@ const tweetWomp = async (womp: Womp) => {
   try {
     // Fetch and upload image
     const mediaUploadResponse = await uploadClient.post('media/upload', {
-      media_data: await base64Image(womp)
+      media_data: await base64Image(womp),
     })
 
     // Add alt text
@@ -73,14 +73,14 @@ const tweetWomp = async (womp: Womp) => {
     if (Boolean(content)) {
       await uploadClient.post('media/metadata/create', {
         media_id: mediaUploadResponse.media_id_string,
-        alt_text: { text: content }
+        alt_text: { text: content },
       })
     }
 
     // Create tweet
     await client.post('statuses/update', {
       status: textForTweet(womp),
-      media_ids: mediaUploadResponse.media_id_string
+      media_ids: mediaUploadResponse.media_id_string,
     })
 
     console.log(`Tweeted womp #${womp.id}: ${textForTweet(womp)}`)
@@ -101,7 +101,7 @@ const getWomps = async (): Promise<Womp[]> => {
     .filter(i => Number(i.link.split('/').slice(-1)) > meta.lastWompId)
     .reverse()
 
-  items = items.map(async item => {
+  items = items.map(async (item) => {
     let { link, content: rawContent, creator, title: location } = item
 
     const linkParts = link.split('/')
@@ -115,7 +115,8 @@ const getWomps = async (): Promise<Womp[]> => {
     let content = rawContent.match(/<\/b>([\s\S]*?)<b>/)[1]
 
     // remove unsolicited mentions by removing @ symbol
-    const search = /(^|\s|\n|\^|\(|\)|\{|\}|\[|\]|\+|\-|\\|\/|\.|\,|\|||\<|\>|\?|\'|\"|\:|\;)@(\w*)/g
+    const search =
+      /(^|\s|\n|\^|\(|\)|\{|\}|\[|\]|\+|\-|\\|\/|\.|\,|\|||\<|\>|\?|\'|\"|\:|\;)@(\w*)/g
     content = content.replace(search, '$1$2')
     location = location.replace(search, '$1$2')
 
