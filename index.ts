@@ -115,8 +115,9 @@ const getWomps = async (): Promise<Womp[]> => {
     let content = rawContent.match(/<\/b>([\s\S]*?)<b>/)[1]
 
     // remove unsolicited mentions by removing @ symbol
-    content = content.replace(/(^|\s|\n)@(\w*)/g, '$1$2')
-    location = location.replace(/(^|\s|\n)@(\w*)/g, '$1$2')
+    const search = /(^|\s|\n|\^|\(|\)|\{|\}|\[|\]|\+|\-|\\|\/|\.|\,|\|||\<|\>|\?|\'|\"|\:|\;)@(\w*)/g
+    content = content.replace(search, '$1$2')
+    location = location.replace(search, '$1$2')
 
     content = content.trim()
     content = truncate(content)
