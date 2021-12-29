@@ -1,8 +1,10 @@
 {
+  "include": ["src/*.ts"],
   "compilerOptions": {
-    "target": "es2019",
+    "module": "commonjs",
+    "target": "es2020",
     "esModuleInterop": true,
-    "resolveJsonModule": true
+    "resolveJsonModule": true,
+    "outDir": "dist",
   },
-  "files": ["index.ts"]
 }

@@ -1,16 +1,24 @@
 {
-  "private": true,
+  "name": "womptron",
+  "version": "1.0.0",
+  "description": "A bot that tweets new womps from Cryptovoxels.",
+  "author": "Ryan Ghods <ryan@ryanio.com>",
+  "license": "CC-BY-NC-2.0",
+  "engines": {
+    "node": "16.x"
+  },
   "scripts": {
-    "start": "NODE_OPTIONS=--max-http-header-size=16384 ts-node-script index.ts"
+    "postinstall": "yarn run build",
+    "build": "npx tsc",
+    "start": "NODE_OPTIONS=--max-http-header-size=16384 node dist/index.js"
   },
   "dependencies": {
     "file-api": "^0.10.4",
     "node-fetch": "^2.6.1",
-    "rss-parser": "^3.12.0",
     "twitter-lite": "^1.1.0"
   },
   "devDependencies": {
-    "@types/node": "^16.9.2",
+    "@types/node": "^16.0.0",
     "prettier": "^2.4.0",
     "ts-node": "^10.2.1",
     "typescript": "^4.4.2"
