@@ -16,6 +16,7 @@ const {
   TWITTER_CONSUMER_SECRET,
   TWITTER_ACCESS_TOKEN,
   TWITTER_ACCESS_TOKEN_SECRET,
+  DEBUG,
 } = process.env
 
 const WOMPTRON_INTERVAL = Number(process.env.WOMPTRON_INTERVAL ?? 60)
@@ -69,13 +70,29 @@ const tweetWomp = async (womp: Womp) => {
 
 const getWomps = async (): Promise<Womp[]> => {
   try {
-    const fetchOpts: any = { mode: 'no-cors' }
-    const result = await fetch(
+    const response = await fetch(
       `https://www.cryptovoxels.com/api/womps.json?${Date.now()}`,
-      fetchOpts
+      { mode: 'no-cors' }
     )
-    const response = await result.json()
-    let { womps } = response
+
+    if (!response.ok) {
+      console.error(
+        `Womptron - Fetch Error - ${response.status}: ${response.statusText}`,
+        DEBUG ? `DEBUG: ${JSON.stringify(await response.text())}` : ''
+      )
+      return
+    }
+
+    const result = await response.json()
+    let { womps } = result
+
+    if (!womps || womps.length === 0) {
+      console.error(
+        'Womptron - No womps returned',
+        DEBUG ? `DEBUG - Result: ${JSON.stringify(result)}` : ''
+      )
+      return
+    }
 
     // since WOMPTRON_INTERVAL
     womps = womps
@@ -107,7 +124,7 @@ const getWomps = async (): Promise<Womp[]> => {
 
     return await Promise.all(womps)
   } catch (error) {
-    console.error(`Womptron - Error fetching womps: ${JSON.stringify(error)}`)
+    console.error(`Womptron - Fetch Error: ${error?.message ?? error}`)
     return []
   }
 }
@@ -115,6 +132,7 @@ const getWomps = async (): Promise<Womp[]> => {
 async function main() {
   const run = async () => {
     const womps = await getWomps()
+    if (!womps) return
     console.log(`Womptron - Found ${womps.length} new womps`)
 
     for (const [index, womp] of womps.slice(0, 5).entries()) {
