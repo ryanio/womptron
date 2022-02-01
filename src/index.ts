@@ -72,7 +72,7 @@ const getWomps = async (): Promise<Womp[]> => {
   try {
     const response = await fetch(
       `https://www.cryptovoxels.com/api/womps.json?${Date.now()}`,
-      { mode: 'no-cors' }
+      { mode: 'no-cors' } as any
     )
 
     if (!response.ok) {
