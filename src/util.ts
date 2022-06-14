@@ -37,3 +37,10 @@ export function truncate(str: string, length = 140, ending = '…') {
     return str
   }
 }
+
+/**
+ * Returns a shortened version of a full ethereum address
+ * (e.g. 0x38a16…c7eb3)
+ */
+export const shortAddr = (addr: string) =>
+  addr.slice(0, 7) + '…' + addr.slice(37, 42)

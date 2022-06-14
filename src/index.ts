@@ -1,6 +1,6 @@
 import fetch from 'node-fetch'
 import Twitter from 'twitter-lite'
-import { base64Image, timeout, truncate } from './util'
+import { base64Image, shortAddr, timeout, truncate } from './util'
 
 export interface Womp {
   id: number
@@ -104,7 +104,8 @@ const getWomps = async (): Promise<Womp[]> => {
       .reverse()
 
     womps = womps.map(async (womp) => {
-      const { id, author_name: author, image_url: imgSrc, coords } = womp
+      const { id, image_url: imgSrc, coords } = womp
+      const author = womp.author_name ?? shortAddr(womp.author)
       const playUrl = `https://www.cryptovoxels.com/play?coords=${coords}`
 
       let content = womp.content
