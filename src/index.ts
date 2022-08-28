@@ -71,7 +71,7 @@ const tweetWomp = async (womp: Womp) => {
 const getWomps = async (): Promise<Womp[]> => {
   try {
     const response = await fetch(
-      `https://www.cryptovoxels.com/api/womps.json?${Date.now()}`,
+      `https://voxels.com/api/womps.json?${Date.now()}`,
       { mode: 'no-cors' } as any
     )
 
@@ -106,7 +106,7 @@ const getWomps = async (): Promise<Womp[]> => {
     womps = womps.map(async (womp) => {
       const { id, image_url: imgSrc, coords } = womp
       const author = womp.author_name ?? shortAddr(womp.author)
-      const playUrl = `https://www.cryptovoxels.com/play?coords=${coords}`
+      const playUrl = `https://voxels.com/play?coords=${coords}`
 
       let content = womp.content
       let location = womp.parcel_name ?? womp.parcel_address
