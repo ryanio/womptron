@@ -28,7 +28,7 @@ const secrets = {
   access_token_secret: TWITTER_ACCESS_TOKEN_SECRET,
 }
 
-const client = new Twitter(secrets)
+const client = new Twitter({ version: '2', extension: false, ...secrets })
 
 const uploadClient = new Twitter({
   subdomain: 'upload',
@@ -57,9 +57,9 @@ const tweetWomp = async (womp: Womp) => {
     }
 
     // Create tweet
-    await client.post('statuses/update', {
-      status: textForTweet(womp),
-      media_ids: mediaUploadResponse.media_id_string,
+    await client.post('tweets', {
+      text: textForTweet(womp),
+      media: { media_ids: [mediaUploadResponse.media_id_string] },
     })
 
     console.log(`Womptron - Tweeted womp #${womp.id}: ${textForTweet(womp)}`)
@@ -131,19 +131,29 @@ const getWomps = async (): Promise<Womp[]> => {
 }
 
 async function main() {
+  let tweeting = false
+  const wompsToTweet = []
+
   const run = async () => {
     const womps = await getWomps()
     if (!womps) return
     console.log(`Womptron - Found ${womps.length} new womps`)
-
-    for (const [index, womp] of womps.slice(0, 5).entries()) {
-      await tweetWomp(womp)
-
-      // Wait 5s between tweets
-      if (womps[index + 1]) {
-        await timeout(5000)
-      }
+    wompsToTweet.push(...womps)
+    if (wompsToTweet.length > 0) {
+      console.log(`Womptron - Tweet queue: ${wompsToTweet.length} womps`)
     }
+    tweetWomps()
+  }
+
+  const tweetWomps = async () => {
+    if (tweeting) return
+    tweeting = true
+    while (wompsToTweet.length > 0) {
+      const womp = wompsToTweet.shift()
+      await tweetWomp(womp)
+      await timeout(2000)
+    }
+    tweeting = false
   }
 
   run()
