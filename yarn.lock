@@ -39,18 +39,6 @@
   resolved "https://registry.yarnpkg.com/@types/node/-/node-16.11.21.tgz#474d7589a30afcf5291f59bd49cca9ad171ffde4"
   integrity sha512-Pf8M1XD9i1ksZEcCP8vuSNwooJ/bZapNmIzpmsMaL+jMI+8mEYU3PKvs+xDNuQcJWF/x24WzY4qxLtB0zNow9A==
 
-"File@>= 0.10.0", File@^0.10.2:
-  version "0.10.2"
-  resolved "https://registry.yarnpkg.com/File/-/File-0.10.2.tgz#e899f776d273e2243ba86105bb3b056d0fb95604"
-  integrity sha1-6Jn3dtJz4iQ7qGEFuzsFbQ+5VgQ=
-  dependencies:
-    mime ">= 0.0.0"
-
-"FileList@>= 0.10.0", FileList@^0.10.2:
-  version "0.10.2"
-  resolved "https://registry.yarnpkg.com/FileList/-/FileList-0.10.2.tgz#6003b1a9715934164b67c434ad6a8741a1cd147a"
-  integrity sha1-YAOxqXFZNBZLZ8Q0rWqHQaHNFHo=
-
 acorn-walk@^8.1.1:
   version "8.2.0"
   resolved "https://registry.yarnpkg.com/acorn-walk/-/acorn-walk-8.2.0.tgz#741210f2e2426454508853a2f44d0ab83b7f69c1"
@@ -65,16 +53,6 @@ arg@^4.1.0:
   version "4.1.3"
   resolved "https://registry.yarnpkg.com/arg/-/arg-4.1.3.tgz#269fc7ad5b8e42cb63c896d5666017261c144089"
   integrity sha512-58S9QDqG0Xx27YwPSt9fJxivjYl432YCwfDMfZ+71RAqUrZef7LrKQZ3LHLOwCS4FLNBplP533Zx895SeOCHvA==
-
-"bufferjs@> 0.2.0":
-  version "3.0.1"
-  resolved "https://registry.yarnpkg.com/bufferjs/-/bufferjs-3.0.1.tgz#0692e829cb10a10550e647390b035eb06c38e8ef"
-  integrity sha1-BpLoKcsQoQVQ5kc5CwNesGw46O8=
-
-bufferjs@^2.0.0:
-  version "2.0.0"
-  resolved "https://registry.yarnpkg.com/bufferjs/-/bufferjs-2.0.0.tgz#685e71ed5c0600e3d703ff9bd012bb3270a39e28"
-  integrity sha1-aF5x7VwGAOPXA/+b0BK7MnCjnig=
 
 create-require@^1.1.0:
   version "1.1.1"
@@ -103,47 +81,6 @@ dom-walk@^0.1.0:
   resolved "https://registry.yarnpkg.com/dom-walk/-/dom-walk-0.1.2.tgz#0c548bef048f4d1f2a97249002236060daa3fd84"
   integrity sha512-6QvTW9mrGeIegrFXdtQi9pk7O/nSK6lSdXW2eqUspN5LWD7UTji2Fqw5V2YLjBpHEoU9Xl/eUWNpDeZvoyOv2w==
 
-file-api@^0.10.4:
-  version "0.10.4"
-  resolved "https://registry.yarnpkg.com/file-api/-/file-api-0.10.4.tgz#2f101226db727cc0172a0dd688f2f6883d52883d"
-  integrity sha1-LxASJttyfMAXKg3WiPL2iD1SiD0=
-  dependencies:
-    File ">= 0.10.0"
-    FileList ">= 0.10.0"
-    bufferjs "> 0.2.0"
-    file-error ">= 0.10.0"
-    filereader ">= 0.10.3"
-    formdata ">= 0.10.0"
-    mime ">= 1.2.11"
-    remedial ">= 1.0.7"
-
-"file-error@>= 0.10.0":
-  version "0.10.2"
-  resolved "https://registry.yarnpkg.com/file-error/-/file-error-0.10.2.tgz#963b48b9273b3d4b84b400ee571bc78b1739724a"
-  integrity sha1-ljtIuSc7PUuEtADuVxvHixc5cko=
-
-"filereader@>= 0.10.3", filereader@^0.10.3:
-  version "0.10.3"
-  resolved "https://registry.yarnpkg.com/filereader/-/filereader-0.10.3.tgz#c747d4a2cd8f61e5418a7c07fe1257a43f0acdb1"
-  integrity sha1-x0fUos2PYeVBinwH/hJXpD8KzbE=
-
-foreachasync@^3.0.0:
-  version "3.0.0"
-  resolved "https://registry.yarnpkg.com/foreachasync/-/foreachasync-3.0.0.tgz#5502987dc8714be3392097f32e0071c9dee07cf6"
-  integrity sha1-VQKYfchxS+M5IJfzLgBxyd7gfPY=
-
-"formdata@>= 0.10.0":
-  version "0.10.4"
-  resolved "https://registry.yarnpkg.com/formdata/-/formdata-0.10.4.tgz#9621fdc0cc361f4a0111de5d25b35f6a78dc55a0"
-  integrity sha1-liH9wMw2H0oBEd5dJbNfanjcVaA=
-  dependencies:
-    File "^0.10.2"
-    FileList "^0.10.2"
-    bufferjs "^2.0.0"
-    filereader "^0.10.3"
-    foreachasync "^3.0.0"
-    remedial "^1.0.7"
-
 get-random-values@^1.2.2:
   version "1.2.2"
   resolved "https://registry.yarnpkg.com/get-random-values/-/get-random-values-1.2.2.tgz#f1d944d0025433d53a2bd9941b9e975d98a2f7ff"
@@ -163,11 +100,6 @@ make-error@^1.1.1:
   version "1.3.6"
   resolved "https://registry.yarnpkg.com/make-error/-/make-error-1.3.6.tgz#2eb2e37ea9b67c4891f684a1394799af484cf7a2"
   integrity sha512-s8UhlNe7vPKomQhC1qFelMokr/Sc3AgNbso3n74mVPA5LTZwkB9NlXf4XPamLxJE8h0gh73rM94xvwRT2CVInw==
-
-"mime@>= 0.0.0", "mime@>= 1.2.11":
-  version "3.0.0"
-  resolved "https://registry.yarnpkg.com/mime/-/mime-3.0.0.tgz#b374550dca3a0c18443b0c950a6a58f1931cf7a7"
-  integrity sha512-jSCU7/VB1loIWBZe14aEYHU/+1UMEHoaO7qxCOVJOw9GgH72VAWppxNcjU+x9a2k3GSIBXNKxXQFqRvvZ7vr3A==
 
 min-document@^2.19.0:
   version "2.19.0"
@@ -215,11 +147,6 @@ punycode@^2.1.0:
   version "2.3.1"
   resolved "https://registry.yarnpkg.com/punycode/-/punycode-2.3.1.tgz#027422e2faec0b25e1549c3e1bd8309b9133b6e5"
   integrity sha512-vYt7UD1U9Wg6138shLtLOvdAu+8DsC/ilFtEVHcH+wydcSpNE20AfSOduf6MkRFahL5FY7X1oU7nKVZFtfq8Fg==
-
-"remedial@>= 1.0.7", remedial@^1.0.7:
-  version "1.0.8"
-  resolved "https://registry.yarnpkg.com/remedial/-/remedial-1.0.8.tgz#a5e4fd52a0e4956adbaf62da63a5a46a78c578a0"
-  integrity sha512-/62tYiOe6DzS5BqVsNpH/nkGlX45C/Sp6V+NtiN6JQNS1Viay7cWkazmRkrQrdFj2eshDe96SIQNIoMxqhzBOg==
 
 tr46@~0.0.3:
   version "0.0.3"
