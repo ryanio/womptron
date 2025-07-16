@@ -71,7 +71,7 @@ const tweetWomp = async (womp: Womp) => {
 const getWomps = async (): Promise<Womp[]> => {
   try {
     const response = await fetch(
-      `https://voxels.com/api/womps.json?${Date.now()}`,
+      `https://www.voxels.com/api/womps.json?${Date.now()}`,
       { mode: 'no-cors' } as any
     )
 
