@@ -3,18 +3,20 @@
  * Provides structured logging with different levels
  */
 
-export enum LogLevel {
-  ERROR = 0,
-  WARN = 1,
-  INFO = 2,
-  DEBUG = 3,
-}
+export const LogLevel = {
+  ERROR: 0,
+  WARN: 1,
+  INFO: 2,
+  DEBUG: 3,
+} as const;
+
+export type LogLevel = (typeof LogLevel)[keyof typeof LogLevel];
 
 export type Logger = {
-  error: (message: string, ...args: any[]) => void;
-  warn: (message: string, ...args: any[]) => void;
-  info: (message: string, ...args: any[]) => void;
-  debug: (message: string, ...args: any[]) => void;
+  error: (message: string, ...args: unknown[]) => void;
+  warn: (message: string, ...args: unknown[]) => void;
+  info: (message: string, ...args: unknown[]) => void;
+  debug: (message: string, ...args: unknown[]) => void;
 };
 
 class WomptronLogger implements Logger {
@@ -27,32 +29,34 @@ class WomptronLogger implements Logger {
   private log(
     level: LogLevel,
     levelName: string,
-    _message: string,
-    ...args: any[]
+    message: string,
+    ...args: unknown[]
   ) {
     if (level <= this.logLevel) {
       const timestamp = new Date().toISOString();
-      const _prefix = `[${timestamp}] [${levelName}] [Womptron]`;
+      const prefix = `[${timestamp}] [${levelName}] [Womptron]`;
 
       if (args.length > 0) {
+        process.stdout.write(`${prefix} ${message} ${JSON.stringify(args)}\n`);
       } else {
+        process.stdout.write(`${prefix} ${message}\n`);
       }
     }
   }
 
-  error(message: string, ...args: any[]) {
+  error(message: string, ...args: unknown[]) {
     this.log(LogLevel.ERROR, 'ERROR', message, ...args);
   }
 
-  warn(message: string, ...args: any[]) {
+  warn(message: string, ...args: unknown[]) {
     this.log(LogLevel.WARN, 'WARN', message, ...args);
   }
 
-  info(message: string, ...args: any[]) {
+  info(message: string, ...args: unknown[]) {
     this.log(LogLevel.INFO, 'INFO', message, ...args);
   }
 
-  debug(message: string, ...args: any[]) {
+  debug(message: string, ...args: unknown[]) {
     this.log(LogLevel.DEBUG, 'DEBUG', message, ...args);
   }
 }

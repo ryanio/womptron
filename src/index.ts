@@ -21,15 +21,31 @@ const {
 } = process.env;
 
 const WOMPTRON_INTERVAL = Number(process.env.WOMPTRON_INTERVAL ?? 60);
+const MILLISECONDS_PER_SECOND = 1000;
+const TWEET_DELAY_MS = 2000;
 
 // Create a function to get the client so it can be mocked in tests
-export const getTwitterClient = () =>
-  new TwitterApi({
-    appKey: TWITTER_CONSUMER_KEY!,
-    appSecret: TWITTER_CONSUMER_SECRET!,
-    accessToken: TWITTER_ACCESS_TOKEN!,
-    accessSecret: TWITTER_ACCESS_TOKEN_SECRET!,
+export const getTwitterClient = () => {
+  if (
+    !(
+      TWITTER_CONSUMER_KEY &&
+      TWITTER_CONSUMER_SECRET &&
+      TWITTER_ACCESS_TOKEN &&
+      TWITTER_ACCESS_TOKEN_SECRET
+    )
+  ) {
+    throw new Error(
+      'Missing required Twitter API credentials in environment variables'
+    );
+  }
+
+  return new TwitterApi({
+    appKey: TWITTER_CONSUMER_KEY,
+    appSecret: TWITTER_CONSUMER_SECRET,
+    accessToken: TWITTER_ACCESS_TOKEN,
+    accessSecret: TWITTER_ACCESS_TOKEN_SECRET,
   });
+};
 
 const client = getTwitterClient();
 
@@ -68,7 +84,7 @@ export const getWomps = async (): Promise<Womp[]> => {
   try {
     const response = await fetch(
       `https://www.voxels.com/api/womps.json?${Date.now()}`,
-      { mode: 'no-cors' } as any
+      { mode: 'no-cors' }
     );
 
     if (!response.ok) {
@@ -93,11 +109,11 @@ export const getWomps = async (): Promise<Womp[]> => {
       .filter(
         (w) =>
           new Date(w.created_at).getTime() >
-          Date.now() - WOMPTRON_INTERVAL * 1000
+          Date.now() - WOMPTRON_INTERVAL * MILLISECONDS_PER_SECOND
       )
       .reverse();
 
-    womps = womps.map(async (womp) => {
+    womps = womps.map((womp) => {
       const { id, image_url: imgSrc, coords } = womp;
       const author = womp.author_name ?? shortAddr(womp.author);
       const playUrl = `https://voxels.com/play?coords=${coords}`;
@@ -117,14 +133,14 @@ export const getWomps = async (): Promise<Womp[]> => {
       return { id, content, location, author, playUrl, imgSrc };
     });
 
-    return await Promise.all(womps);
+    return womps;
   } catch (error) {
     logger.error(`Fetch Error: ${error?.message ?? error}`);
     return [];
   }
 };
 
-export async function main() {
+export function main() {
   let tweeting = false;
   const wompsToTweet: Womp[] = [];
 
@@ -138,25 +154,37 @@ export async function main() {
     if (wompsToTweet.length > 0) {
       logger.info(`Tweet queue: ${wompsToTweet.length} womps`);
     }
+    // Fire and forget async function
     tweetWomps();
   };
 
   const tweetWomps = async () => {
+    // Prevent concurrent tweeting operations
+    // biome-ignore lint/nursery/noUnnecessaryConditions: This is a semaphore pattern
     if (tweeting) {
       return;
     }
     tweeting = true;
-    while (wompsToTweet.length > 0) {
-      const womp = wompsToTweet.shift()!;
-      await tweetWomp(womp);
-      await timeout(2000);
+
+    try {
+      while (wompsToTweet.length > 0) {
+        const womp = wompsToTweet.shift();
+        if (womp) {
+          await tweetWomp(womp);
+          await timeout(TWEET_DELAY_MS);
+        }
+      }
+    } finally {
+      tweeting = false;
     }
-    tweeting = false;
   };
 
   run();
 
-  const interval = setInterval(run.bind(this), WOMPTRON_INTERVAL * 1000);
+  const interval = setInterval(
+    run.bind(this),
+    WOMPTRON_INTERVAL * MILLISECONDS_PER_SECOND
+  );
 
   process.on('SIGINT', () => {
     logger.info('Caught interrupt signal. Stopping...');
