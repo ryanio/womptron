@@ -17,7 +17,6 @@ const {
   TWITTER_CONSUMER_SECRET,
   TWITTER_ACCESS_TOKEN,
   TWITTER_ACCESS_TOKEN_SECRET,
-  DEBUG,
 } = process.env;
 
 const WOMPTRON_INTERVAL = Number(process.env.WOMPTRON_INTERVAL ?? 60);
@@ -83,16 +82,13 @@ export const tweetWomp = async (womp: Womp, twitterClient = client) => {
 export const getWomps = async (): Promise<Womp[]> => {
   try {
     const response = await fetch(
-      `https://www.voxels.com/api/womps.json?${Date.now()}`,
-      { mode: 'no-cors' }
+      `https://www.voxels.com/api/womps.json?${Date.now()}`
     );
 
     if (!response.ok) {
-      const errorDetails = DEBUG ? await response.text() : '';
-      logger.error(
-        `Fetch Error - ${response.status}: ${response.statusText}`,
-        errorDetails ? { debug: errorDetails } : {}
-      );
+      const errorDetails = await response.text();
+      logger.error(`Fetch Error - ${response.status}: ${response.statusText}`);
+      logger.debug('Response details:', { errorDetails });
       return [];
     }
 
@@ -100,7 +96,8 @@ export const getWomps = async (): Promise<Womp[]> => {
     let { womps } = result;
 
     if (!womps || womps.length === 0) {
-      logger.error('No womps returned', DEBUG ? { debug: result } : {});
+      logger.error('No womps returned');
+      logger.debug('API response:', { result });
       return [];
     }
 
