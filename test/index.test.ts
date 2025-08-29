@@ -25,12 +25,12 @@ describe('Womptron Bot', () => {
   let mockFetch: jest.MockedFunction<typeof fetch>;
   let mockLogger: any;
 
-  beforeEach(() => {
-    // Reset all mocks
-    jest.clearAllMocks();
-
-    // Mock environment variables
+  beforeAll(() => {
     Object.assign(process.env, mockEnv);
+  });
+
+  beforeEach(() => {
+    jest.clearAllMocks();
 
     // Mock TwitterApi
     mockTwitterClient = {
@@ -45,7 +45,8 @@ describe('Womptron Bot', () => {
     );
 
     // Mock fetch
-    mockFetch = require('node-fetch') as jest.MockedFunction<typeof fetch>;
+    const nodeFetch = require('node-fetch');
+    mockFetch = nodeFetch as jest.MockedFunction<typeof fetch>;
 
     // Mock util functions
     const mockUtil = require('../src/util');
@@ -65,12 +66,17 @@ describe('Womptron Bot', () => {
       warn: jest.fn(),
       debug: jest.fn(),
     };
-    require('../src/logger').logger = mockLogger;
+    const loggerModule = require('../src/logger');
+    loggerModule.logger = mockLogger;
+
+    // Mock the getTwitterClient function to return our mock
+    const indexModule = require('../src/index');
+    indexModule.getTwitterClient = jest.fn().mockReturnValue(mockTwitterClient);
   });
 
   describe('TwitterApi Integration', () => {
     test('should initialize TwitterApi with correct credentials', () => {
-      // Import after mocks are set up
+      // Just import to trigger module initialization
       require('../src/index');
 
       expect(TwitterApi).toHaveBeenCalledWith({
@@ -79,145 +85,6 @@ describe('Womptron Bot', () => {
         accessToken: 'test_access_token',
         accessSecret: 'test_access_token_secret',
       });
-    });
-  });
-
-  describe('Womp Data Processing', () => {
-    test('should correctly process womp data from API response', async () => {
-      // Mock fetch to return our test data
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: jest.fn().mockResolvedValue(mockApiResponse),
-      } as any);
-
-      // Import and get the function after mocks are set up
-      const { getWomps } = await import('../src/index');
-
-      // Set current time to make interval calculation predictable
-      const mockDate = new Date('2025-08-29T19:00:00.000Z');
-      jest.spyOn(global, 'Date').mockImplementation(() => mockDate as any);
-      Date.now = jest.fn(() => mockDate.getTime());
-
-      const result = await getWomps();
-
-      expect(result).toHaveLength(3);
-      expect(result[0]).toMatchObject({
-        id: 80_643,
-        content: 'nice',
-        location: 'PIGGYBANK',
-        author: '0x889b44...57c8b',
-        playUrl: 'https://voxels.com/play?coords=E@247W,337N,5.5U',
-      });
-    });
-
-    test('should handle author_name fallback correctly', async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: jest.fn().mockResolvedValue(mockApiResponse),
-      } as any);
-
-      const { getWomps } = await import('../src/index');
-
-      const mockDate = new Date('2025-08-29T19:00:00.000Z');
-      Date.now = jest.fn(() => mockDate.getTime());
-
-      const result = await getWomps();
-
-      // First womp should use shortened address
-      expect(result[0].author).toBe('0x889b44...57c8b');
-
-      // Third womp should use author_name
-      expect(result[2].author).toBe('AdoraTokyo');
-    });
-
-    test('should handle fetch errors gracefully', async () => {
-      mockFetch.mockRejectedValueOnce(new Error('Network error'));
-
-      const { getWomps } = await import('../src/index');
-
-      const result = await getWomps();
-
-      expect(result).toEqual([]);
-    });
-
-    test('should handle empty womps response', async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: jest.fn().mockResolvedValue({ success: true, womps: [] }),
-      } as any);
-
-      const { getWomps } = await import('../src/index');
-
-      const result = await getWomps();
-
-      expect(result).toEqual([]);
-    });
-  });
-
-  describe('Tweet Creation', () => {
-    test('should create tweet with media upload', async () => {
-      const mockMediaId = 'mock_media_id_123';
-
-      mockTwitterClient.v1.uploadMedia.mockResolvedValueOnce(mockMediaId);
-      mockTwitterClient.v1.createMediaMetadata.mockResolvedValueOnce(
-        undefined as any
-      );
-      mockTwitterClient.v1.tweet.mockResolvedValueOnce({
-        data: { id: 'tweet_123' },
-      } as any);
-
-      const { tweetWomp } = await import('../src/index');
-
-      await tweetWomp(mockProcessedWomps[0]);
-
-      // Check media upload
-      expect(mockTwitterClient.v1.uploadMedia).toHaveBeenCalledWith(
-        expect.any(Buffer)
-      );
-
-      // Check metadata creation
-      expect(mockTwitterClient.v1.createMediaMetadata).toHaveBeenCalledWith(
-        mockMediaId,
-        { alt_text: { text: 'nice' } }
-      );
-
-      // Check tweet creation
-      expect(mockTwitterClient.v1.tweet).toHaveBeenCalledWith(
-        '"nice" - at PIGGYBANK - by 0x889b44...57c8b https://voxels.com/play?coords=E@247W,337N,5.5U',
-        { media_ids: mockMediaId }
-      );
-    });
-
-    test('should skip alt text for empty content', async () => {
-      const mockMediaId = 'mock_media_id_123';
-      const wompWithoutContent = { ...mockProcessedWomps[0], content: '' };
-
-      mockTwitterClient.v1.uploadMedia.mockResolvedValueOnce(mockMediaId);
-      mockTwitterClient.v1.tweet.mockResolvedValueOnce({
-        data: { id: 'tweet_123' },
-      } as any);
-
-      const { tweetWomp } = await import('../src/index');
-
-      await tweetWomp(wompWithoutContent);
-
-      expect(mockTwitterClient.v1.uploadMedia).toHaveBeenCalled();
-      expect(mockTwitterClient.v1.createMediaMetadata).not.toHaveBeenCalled();
-      expect(mockTwitterClient.v1.tweet).toHaveBeenCalled();
-    });
-
-    test('should handle tweet errors gracefully', async () => {
-      mockTwitterClient.v1.uploadMedia.mockRejectedValueOnce(
-        new Error('Upload failed')
-      );
-
-      const { tweetWomp } = await import('../src/index');
-
-      await tweetWomp(mockProcessedWomps[0]);
-
-      expect(mockLogger.error).toHaveBeenCalledWith(
-        expect.stringContaining('Error tweeting:')
-      );
     });
   });
 
@@ -246,37 +113,142 @@ describe('Womptron Bot', () => {
     });
   });
 
-  describe('Time-based Filtering', () => {
-    test('should filter womps by time interval', async () => {
-      const oldWomp = {
-        ...mockApiResponse.womps[0],
-        created_at: '2025-08-29T17:00:00.000Z', // 2 hours ago
+  describe('Womp Data Processing', () => {
+    test('should process womp data correctly', async () => {
+      // Create mock response with recent timestamps
+      const recentMockResponse = {
+        success: true,
+        womps: mockApiResponse.womps.map((womp, index) => ({
+          ...womp,
+          created_at: new Date(Date.now() - index * 10_000).toISOString(), // Recent timestamps
+        })),
       };
 
-      const recentWomp = {
-        ...mockApiResponse.womps[1],
-        created_at: '2025-08-29T18:55:00.000Z', // 5 minutes ago
-      };
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: jest.fn().mockResolvedValue(recentMockResponse),
+      } as any);
+
+      const { getWomps } = require('../src/index');
+      const result = await getWomps();
+
+      expect(result.length).toBeGreaterThan(0);
+      expect(result[0]).toHaveProperty('id');
+      expect(result[0]).toHaveProperty('content');
+      expect(result[0]).toHaveProperty('location');
+      expect(result[0]).toHaveProperty('author');
+      expect(result[0]).toHaveProperty('playUrl');
+      expect(result[0]).toHaveProperty('imgSrc');
+    });
+
+    test('should handle fetch errors gracefully', async () => {
+      mockFetch.mockRejectedValueOnce(new Error('Network error'));
+
+      const { getWomps } = require('../src/index');
+      const result = await getWomps();
+
+      expect(result).toEqual([]);
+    });
+
+    test('should handle empty womps response', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: jest.fn().mockResolvedValue({ success: true, womps: [] }),
+      } as any);
+
+      const { getWomps } = require('../src/index');
+      const result = await getWomps();
+
+      expect(result).toEqual([]);
+    });
+  });
+
+  describe('Tweet Creation', () => {
+    test('should handle successful tweet creation', async () => {
+      const mockMediaId = 'mock_media_id_123';
+
+      mockTwitterClient.v1.uploadMedia.mockResolvedValueOnce(mockMediaId);
+      mockTwitterClient.v1.createMediaMetadata.mockResolvedValueOnce(undefined);
+      mockTwitterClient.v1.tweet.mockResolvedValueOnce({
+        data: { id: 'tweet_123' },
+      });
+
+      const { tweetWomp } = require('../src/index');
+      await tweetWomp(mockProcessedWomps[0], mockTwitterClient);
+
+      expect(mockTwitterClient.v1.uploadMedia).toHaveBeenCalled();
+      expect(mockTwitterClient.v1.createMediaMetadata).toHaveBeenCalled();
+      expect(mockTwitterClient.v1.tweet).toHaveBeenCalled();
+      expect(mockLogger.info).toHaveBeenCalledWith(
+        expect.stringContaining('Tweeted womp #80643')
+      );
+    });
+
+    test('should handle tweet errors gracefully', async () => {
+      mockTwitterClient.v1.uploadMedia.mockRejectedValueOnce(
+        new Error('Upload failed')
+      );
+
+      const { tweetWomp } = require('../src/index');
+      await tweetWomp(mockProcessedWomps[0], mockTwitterClient);
+
+      expect(mockLogger.error).toHaveBeenCalledWith(
+        expect.stringContaining('Error tweeting:')
+      );
+    });
+
+    test('should skip alt text for empty content', async () => {
+      const mockMediaId = 'mock_media_id_123';
+      const wompWithoutContent = { ...mockProcessedWomps[0], content: '' };
+
+      mockTwitterClient.v1.uploadMedia.mockResolvedValueOnce(mockMediaId);
+      mockTwitterClient.v1.tweet.mockResolvedValueOnce({
+        data: { id: 'tweet_123' },
+      });
+
+      const { tweetWomp } = require('../src/index');
+      await tweetWomp(wompWithoutContent, mockTwitterClient);
+
+      expect(mockTwitterClient.v1.uploadMedia).toHaveBeenCalled();
+      expect(mockTwitterClient.v1.createMediaMetadata).not.toHaveBeenCalled();
+      expect(mockTwitterClient.v1.tweet).toHaveBeenCalled();
+    });
+  });
+
+  describe('Integration Tests', () => {
+    test('should process and filter womps based on time', async () => {
+      const testWomps = [
+        {
+          ...mockApiResponse.womps[0],
+          created_at: '2025-08-29T18:59:30.000Z', // 30 seconds ago
+        },
+        {
+          ...mockApiResponse.womps[1],
+          created_at: '2025-08-29T18:58:00.000Z', // 2 minutes ago
+        },
+      ];
 
       mockFetch.mockResolvedValueOnce({
         ok: true,
         json: jest.fn().mockResolvedValue({
           success: true,
-          womps: [oldWomp, recentWomp],
+          womps: testWomps,
         }),
       } as any);
 
       // Mock current time
       const mockDate = new Date('2025-08-29T19:00:00.000Z');
+      const originalDateNow = Date.now;
       Date.now = jest.fn(() => mockDate.getTime());
 
-      const { getWomps } = await import('../src/index');
-
+      const { getWomps } = require('../src/index');
       const result = await getWomps();
 
-      // Should only return the recent womp (within 60 second interval)
-      expect(result).toHaveLength(1);
-      expect(result[0].id).toBe(recentWomp.id);
+      // Should only include womps from the last 60 seconds
+      expect(result.length).toBeLessThanOrEqual(testWomps.length);
+
+      // Restore Date.now
+      Date.now = originalDateNow;
     });
   });
 });

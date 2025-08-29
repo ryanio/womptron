@@ -3,14 +3,14 @@ import { TwitterApi } from 'twitter-api-v2';
 import { logger } from './logger';
 import { base64Image, shortAddr, timeout, truncate } from './util';
 
-export interface Womp {
+export type Womp = {
   id: number;
   author: string;
   location: string;
   content: string;
   playUrl: string;
   imgSrc: string;
-}
+};
 
 const {
   TWITTER_CONSUMER_KEY,
@@ -22,35 +22,39 @@ const {
 
 const WOMPTRON_INTERVAL = Number(process.env.WOMPTRON_INTERVAL ?? 60);
 
-const client = new TwitterApi({
-  appKey: TWITTER_CONSUMER_KEY!,
-  appSecret: TWITTER_CONSUMER_SECRET!,
-  accessToken: TWITTER_ACCESS_TOKEN!,
-  accessSecret: TWITTER_ACCESS_TOKEN_SECRET!,
-});
+// Create a function to get the client so it can be mocked in tests
+export const getTwitterClient = () =>
+  new TwitterApi({
+    appKey: TWITTER_CONSUMER_KEY!,
+    appSecret: TWITTER_CONSUMER_SECRET!,
+    accessToken: TWITTER_ACCESS_TOKEN!,
+    accessSecret: TWITTER_ACCESS_TOKEN_SECRET!,
+  });
+
+const client = getTwitterClient();
 
 export const textForTweet = (womp: Womp) => {
   const { content, location, author, playUrl } = womp;
   return `"${content}" - at ${location} - by ${author} ${playUrl}`;
 };
 
-export const tweetWomp = async (womp: Womp) => {
+export const tweetWomp = async (womp: Womp, twitterClient = client) => {
   try {
     // Fetch and upload image
-    const mediaUploadResponse = await client.v1.uploadMedia(
+    const mediaUploadResponse = await twitterClient.v1.uploadMedia(
       Buffer.from(await base64Image(womp), 'base64')
     );
 
     // Add alt text
     const { content } = womp;
     if (content) {
-      await client.v1.createMediaMetadata(mediaUploadResponse, {
+      await twitterClient.v1.createMediaMetadata(mediaUploadResponse, {
         alt_text: { text: content },
       });
     }
 
     // Create tweet
-    await client.v1.tweet(textForTweet(womp), {
+    await twitterClient.v1.tweet(textForTweet(womp), {
       media_ids: mediaUploadResponse,
     });
 
@@ -120,13 +124,15 @@ export const getWomps = async (): Promise<Womp[]> => {
   }
 };
 
-async function main() {
+export async function main() {
   let tweeting = false;
   const wompsToTweet: Womp[] = [];
 
   const run = async () => {
     const womps = await getWomps();
-    if (!womps) return;
+    if (!womps) {
+      return;
+    }
     logger.info(`Found ${womps.length} new womps`);
     wompsToTweet.push(...womps);
     if (wompsToTweet.length > 0) {
@@ -136,7 +142,9 @@ async function main() {
   };
 
   const tweetWomps = async () => {
-    if (tweeting) return;
+    if (tweeting) {
+      return;
+    }
     tweeting = true;
     while (wompsToTweet.length > 0) {
       const womp = wompsToTweet.shift()!;
@@ -155,6 +163,11 @@ async function main() {
     clearInterval(interval);
     process.exit();
   });
+
+  return interval;
 }
 
-main();
+// Only run main if this file is executed directly (not imported in tests)
+if (require.main === module) {
+  main();
+}

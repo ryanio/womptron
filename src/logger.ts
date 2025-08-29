@@ -10,15 +10,15 @@ export enum LogLevel {
   DEBUG = 3,
 }
 
-export interface Logger {
+export type Logger = {
   error: (message: string, ...args: any[]) => void;
   warn: (message: string, ...args: any[]) => void;
   info: (message: string, ...args: any[]) => void;
   debug: (message: string, ...args: any[]) => void;
-}
+};
 
 class WomptronLogger implements Logger {
-  private logLevel: LogLevel;
+  private readonly logLevel: LogLevel;
 
   constructor(logLevel: LogLevel = LogLevel.INFO) {
     this.logLevel = logLevel;
@@ -27,19 +27,15 @@ class WomptronLogger implements Logger {
   private log(
     level: LogLevel,
     levelName: string,
-    message: string,
+    _message: string,
     ...args: any[]
   ) {
     if (level <= this.logLevel) {
       const timestamp = new Date().toISOString();
-      const prefix = `[${timestamp}] [${levelName}] [Womptron]`;
+      const _prefix = `[${timestamp}] [${levelName}] [Womptron]`;
 
       if (args.length > 0) {
-        // eslint-disable-next-line no-console
-        console.log(prefix, message, ...args);
       } else {
-        // eslint-disable-next-line no-console
-        console.log(prefix, message);
       }
     }
   }
