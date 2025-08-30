@@ -84,6 +84,3 @@ export const mockProcessedWomps: Womp[] = [
       'https://media.crvox.com/womps/0x158efd533f5fae7933c334e8e9cdc1026a7a95a2/womp_1756425054166_8aa2944c3baa5943cfb426d6e29f51e6.jpg',
   },
 ];
-
-export const mockBase64Image =
-  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8/5+hHgAHggJ/PchI7wAAAABJRU5ErkJggg==';

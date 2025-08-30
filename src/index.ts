@@ -1,7 +1,7 @@
 import fetch from 'node-fetch';
 import { TwitterApi } from 'twitter-api-v2';
 import { logger } from './logger';
-import { base64Image, shortAddr, timeout, truncate } from './util';
+import { shortAddr, timeout, truncate } from './util';
 
 export type Womp = {
   id: number;
@@ -55,9 +55,26 @@ export const textForTweet = (womp: Womp) => {
 
 export const tweetWomp = async (womp: Womp, twitterClient = client) => {
   try {
-    // Fetch and upload image
+    // Fetch image directly
+    const response = await fetch(womp.imgSrc);
+    if (!response.ok) {
+      throw new Error(
+        `Failed to fetch image: ${response.status} ${response.statusText} for URL: ${womp.imgSrc}`
+      );
+    }
+
+    // Upload image directly from response buffer
+    const imageBuffer = await response.buffer();
+
+    // Get content type from response headers, fallback to image/jpeg
+    const contentType = response.headers.get('content-type') || 'image/jpeg';
+
     const mediaUploadResponse = await twitterClient.v1.uploadMedia(
-      Buffer.from(await base64Image(womp), 'base64')
+      imageBuffer,
+      {
+        type: contentType,
+        mimeType: contentType,
+      }
     );
 
     // Add alt text
