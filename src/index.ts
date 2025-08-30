@@ -75,7 +75,16 @@ export const tweetWomp = async (womp: Womp, twitterClient = client) => {
 
     logger.info(`Tweeted womp #${womp.id}: ${textForTweet(womp)}`);
   } catch (error) {
-    logger.error(`Error tweeting: ${JSON.stringify(error)}`);
+    const errorMessage =
+      error instanceof Error
+        ? `${error.name}: ${error.message}`
+        : String(error);
+    logger.error(`Error tweeting: ${errorMessage}`);
+
+    // Log additional error details if available
+    if (error instanceof Error && error.stack) {
+      logger.debug(`Stack trace: ${error.stack}`);
+    }
   }
 };
 
@@ -132,7 +141,16 @@ export const getWomps = async (): Promise<Womp[]> => {
 
     return womps;
   } catch (error) {
-    logger.error(`Fetch Error: ${error?.message ?? error}`);
+    const errorMessage =
+      error instanceof Error
+        ? `${error.name}: ${error.message}`
+        : String(error);
+    logger.error(`Fetch Error: ${errorMessage}`);
+
+    // Log additional error details if available
+    if (error instanceof Error && error.stack) {
+      logger.debug(`Stack trace: ${error.stack}`);
+    }
     return [];
   }
 };

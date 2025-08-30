@@ -3,6 +3,13 @@ import type { Womp } from './index';
 
 export async function base64Image(womp: Womp): Promise<string> {
   const response = await fetch(womp.imgSrc);
+
+  if (!response.ok) {
+    throw new Error(
+      `Failed to fetch image: ${response.status} ${response.statusText} for URL: ${womp.imgSrc}`
+    );
+  }
+
   const buf = await response.buffer();
   return buf.toString('base64');
 }
