@@ -34,7 +34,7 @@ class WomptronLogger implements Logger {
   ) {
     if (level <= this.logLevel) {
       const timestamp = new Date().toISOString();
-      const prefix = `[${timestamp}] [${levelName}] [Womptron]`;
+      const prefix = `${timestamp} [${levelName}] [Womptron]`;
 
       if (args.length > 0) {
         process.stdout.write(`${prefix} ${message} ${JSON.stringify(args)}\n`);
