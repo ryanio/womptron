@@ -35,6 +35,9 @@ describe('Womptron Bot', () => {
         createMediaMetadata: jest.fn(),
         tweet: jest.fn(),
       },
+      v2: {
+        tweet: jest.fn(),
+      },
     };
     (TwitterApi as jest.MockedClass<typeof TwitterApi>).mockImplementation(
       () => mockTwitterClient
@@ -173,8 +176,7 @@ describe('Womptron Bot', () => {
       } as any);
 
       mockTwitterClient.v1.uploadMedia.mockResolvedValueOnce(mockMediaId);
-      mockTwitterClient.v1.createMediaMetadata.mockResolvedValueOnce(undefined);
-      mockTwitterClient.v1.tweet.mockResolvedValueOnce({
+      mockTwitterClient.v2.tweet.mockResolvedValueOnce({
         data: { id: 'tweet_123' },
       });
 
@@ -189,8 +191,10 @@ describe('Womptron Bot', () => {
           mimeType: 'image/jpeg',
         }
       );
-      expect(mockTwitterClient.v1.createMediaMetadata).toHaveBeenCalled();
-      expect(mockTwitterClient.v1.tweet).toHaveBeenCalled();
+      expect(mockTwitterClient.v2.tweet).toHaveBeenCalledWith({
+        text: expect.stringContaining('nice'),
+        media: { media_ids: [mockMediaId] },
+      });
       expect(mockLogger.info).toHaveBeenCalledWith(
         expect.stringContaining('Tweeted womp #80643')
       );
@@ -220,7 +224,7 @@ describe('Womptron Bot', () => {
       );
     });
 
-    test('should skip alt text for empty content', async () => {
+    test('should tweet with media using v2 API', async () => {
       const mockMediaId = 'mock_media_id_123';
       const mockImageBuffer = Buffer.from('fake_image_data');
       const wompWithoutContent = { ...mockProcessedWomps[0], content: '' };
@@ -235,7 +239,7 @@ describe('Womptron Bot', () => {
       } as any);
 
       mockTwitterClient.v1.uploadMedia.mockResolvedValueOnce(mockMediaId);
-      mockTwitterClient.v1.tweet.mockResolvedValueOnce({
+      mockTwitterClient.v2.tweet.mockResolvedValueOnce({
         data: { id: 'tweet_123' },
       });
 
@@ -243,8 +247,10 @@ describe('Womptron Bot', () => {
       await tweetWomp(wompWithoutContent, mockTwitterClient);
 
       expect(mockTwitterClient.v1.uploadMedia).toHaveBeenCalled();
-      expect(mockTwitterClient.v1.createMediaMetadata).not.toHaveBeenCalled();
-      expect(mockTwitterClient.v1.tweet).toHaveBeenCalled();
+      expect(mockTwitterClient.v2.tweet).toHaveBeenCalledWith({
+        text: expect.any(String),
+        media: { media_ids: [mockMediaId] },
+      });
     });
   });
 

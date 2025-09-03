@@ -77,17 +77,10 @@ export const tweetWomp = async (womp: Womp, twitterClient = client) => {
       }
     );
 
-    // Add alt text
-    const { content } = womp;
-    if (content) {
-      await twitterClient.v1.createMediaMetadata(mediaUploadResponse, {
-        alt_text: { text: content },
-      });
-    }
-
-    // Create tweet
-    await twitterClient.v1.tweet(textForTweet(womp), {
-      media_ids: mediaUploadResponse,
+    // Create tweet using v2 API (works with Basic tier)
+    await twitterClient.v2.tweet({
+      text: textForTweet(womp),
+      media: { media_ids: [mediaUploadResponse] },
     });
 
     logger.info(`Tweeted womp #${womp.id}: ${textForTweet(womp)}`);
