@@ -50,7 +50,21 @@ const client = getTwitterClient();
 
 export const textForTweet = (womp: Womp) => {
   const { content, location, author, playUrl } = womp;
-  return `"${content}" - at ${location} - by ${author} ${playUrl}`;
+
+  const parts: string[] = [];
+
+  if (content) {
+    parts.push(`"${content}"`);
+  }
+
+  if (location) {
+    parts.push(`at ${location}`);
+  }
+
+  parts.push(`by ${author}`);
+  parts.push(playUrl);
+
+  return parts.join(' - ');
 };
 
 export const tweetWomp = async (womp: Womp, twitterClient = client) => {
@@ -134,8 +148,8 @@ export const getWomps = async (): Promise<Womp[]> => {
       const author = womp.author_name ?? shortAddr(womp.author);
       const playUrl = `https://voxels.com/play?coords=${coords}`;
 
-      let content = womp.content;
-      let location = womp.parcel_name ?? womp.parcel_address;
+      let content = womp.content ?? '';
+      let location = womp.parcel_name ?? womp.parcel_address ?? '';
 
       // remove unsolicited mentions by removing @ symbol
       const search =

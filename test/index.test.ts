@@ -93,7 +93,7 @@ describe('Womptron Bot', () => {
       const result = textForTweet(mockProcessedWomps[0]);
 
       expect(result).toBe(
-        '"nice" - at PIGGYBANK - by 0x889b44...57c8b https://voxels.com/play?coords=E@247W,337N,5.5U'
+        '"nice" - at PIGGYBANK - by 0x889b44...57c8b - https://voxels.com/play?coords=E@247W,337N,5.5U'
       );
     });
 
@@ -108,6 +108,56 @@ describe('Womptron Bot', () => {
       const result = textForTweet(wompWithSpecialChars);
 
       expect(result).toContain('Hello @world & "friends"');
+    });
+
+    test('should handle empty content gracefully', () => {
+      const { textForTweet } = require('../src/index');
+
+      const wompWithoutContent = {
+        ...mockProcessedWomps[0],
+        content: '',
+      };
+
+      const result = textForTweet(wompWithoutContent);
+
+      expect(result).toBe(
+        'at PIGGYBANK - by 0x889b44...57c8b - https://voxels.com/play?coords=E@247W,337N,5.5U'
+      );
+      expect(result).not.toContain('""');
+    });
+
+    test('should handle empty location gracefully', () => {
+      const { textForTweet } = require('../src/index');
+
+      const wompWithoutLocation = {
+        ...mockProcessedWomps[0],
+        location: '',
+      };
+
+      const result = textForTweet(wompWithoutLocation);
+
+      expect(result).toBe(
+        '"nice" - by 0x889b44...57c8b - https://voxels.com/play?coords=E@247W,337N,5.5U'
+      );
+      expect(result).not.toContain('at  -');
+    });
+
+    test('should handle both empty content and location', () => {
+      const { textForTweet } = require('../src/index');
+
+      const wompMinimal = {
+        ...mockProcessedWomps[0],
+        content: '',
+        location: '',
+      };
+
+      const result = textForTweet(wompMinimal);
+
+      expect(result).toBe(
+        'by 0x889b44...57c8b - https://voxels.com/play?coords=E@247W,337N,5.5U'
+      );
+      expect(result).not.toContain('""');
+      expect(result).not.toContain('at  -');
     });
   });
 
