@@ -16,6 +16,18 @@ const mockEnv = {
   WOMPTRON_INTERVAL: '60',
 };
 
+// Re-imports src/index with temporary env overrides, since the module reads
+// its config at load time.
+const withEnv = (env: Record<string, string>, fn: () => void) => {
+  const previous = { ...process.env };
+  Object.assign(process.env, env);
+  try {
+    jest.isolateModules(fn);
+  } finally {
+    process.env = previous;
+  }
+};
+
 describe('Womptron Bot', () => {
   let mockTwitterClient: any;
   let mockFetch: jest.MockedFunction<typeof fetch>;
@@ -31,12 +43,12 @@ describe('Womptron Bot', () => {
     // Mock TwitterApi
     mockTwitterClient = {
       v1: {
-        uploadMedia: jest.fn(),
         createMediaMetadata: jest.fn(),
         tweet: jest.fn(),
       },
       v2: {
         tweet: jest.fn(),
+        uploadMedia: jest.fn(),
       },
     };
     (TwitterApi as jest.MockedClass<typeof TwitterApi>).mockImplementation(
@@ -93,7 +105,7 @@ describe('Womptron Bot', () => {
       const result = textForTweet(mockProcessedWomps[0]);
 
       expect(result).toBe(
-        '"nice" - at PIGGYBANK - by 0x889b44...57c8b - https://voxels.com/play?coords=E@247W,337N,5.5U'
+        '"nice" - at PIGGYBANK (E@247W,337N,5.5U) - by 0x889b44...57c8b'
       );
     });
 
@@ -121,7 +133,7 @@ describe('Womptron Bot', () => {
       const result = textForTweet(wompWithoutContent);
 
       expect(result).toBe(
-        'at PIGGYBANK - by 0x889b44...57c8b - https://voxels.com/play?coords=E@247W,337N,5.5U'
+        'at PIGGYBANK (E@247W,337N,5.5U) - by 0x889b44...57c8b'
       );
       expect(result).not.toContain('""');
     });
@@ -136,8 +148,9 @@ describe('Womptron Bot', () => {
 
       const result = textForTweet(wompWithoutLocation);
 
+      // With no parcel name the coords stand in as the location
       expect(result).toBe(
-        '"nice" - by 0x889b44...57c8b - https://voxels.com/play?coords=E@247W,337N,5.5U'
+        '"nice" - at E@247W,337N,5.5U - by 0x889b44...57c8b'
       );
       expect(result).not.toContain('at  -');
     });
@@ -149,15 +162,73 @@ describe('Womptron Bot', () => {
         ...mockProcessedWomps[0],
         content: '',
         location: '',
+        coords: '',
       };
 
       const result = textForTweet(wompMinimal);
 
-      expect(result).toBe(
-        'by 0x889b44...57c8b - https://voxels.com/play?coords=E@247W,337N,5.5U'
-      );
+      expect(result).toBe('by 0x889b44...57c8b');
       expect(result).not.toContain('""');
       expect(result).not.toContain('at  -');
+    });
+
+    test('should omit the play URL by default', () => {
+      const { textForTweet } = require('../src/index');
+
+      const result = textForTweet(mockProcessedWomps[0]);
+
+      expect(result).not.toContain('https://');
+      expect(result).not.toContain('voxels.com/play');
+      // The coords still reach the reader through the location text
+      expect(result).toContain('E@247W,337N,5.5U');
+    });
+
+    test('should include the play URL when WOMPTRON_INCLUDE_URL is true', () => {
+      let result = '';
+
+      withEnv({ WOMPTRON_INCLUDE_URL: 'true' }, () => {
+        const { textForTweet } = require('../src/index');
+        result = textForTweet(mockProcessedWomps[0]);
+      });
+
+      expect(result).toBe(
+        '"nice" - at PIGGYBANK (E@247W,337N,5.5U) - by 0x889b44...57c8b - https://voxels.com/play?coords=E@247W,337N,5.5U'
+      );
+    });
+  });
+
+  describe('Tweet Cap', () => {
+    test('should leave the queue alone when under the cap', () => {
+      const { applyTweetCap } = require('../src/index');
+
+      const queue = [...mockProcessedWomps];
+      applyTweetCap(queue);
+
+      expect(queue).toHaveLength(mockProcessedWomps.length);
+      expect(mockLogger.warn).not.toHaveBeenCalled();
+    });
+
+    test('should keep the newest N and log what was skipped', () => {
+      const queue = [...mockProcessedWomps];
+
+      withEnv({ WOMPTRON_MAX_TWEETS_PER_RUN: '2' }, () => {
+        const loggerModule = require('../src/logger');
+        loggerModule.logger = mockLogger;
+        const { applyTweetCap } = require('../src/index');
+        applyTweetCap(queue);
+      });
+
+      // Queue is oldest first, so the newest two survive
+      expect(queue.map((w: any) => w.id)).toEqual([80_642, 80_634]);
+      expect(mockLogger.warn).toHaveBeenCalledWith(
+        expect.stringContaining('skipping 1')
+      );
+      expect(mockLogger.warn).toHaveBeenCalledWith(
+        expect.stringContaining('Estimated cost avoided: $0.015')
+      );
+      expect(mockLogger.warn).toHaveBeenCalledWith(
+        expect.stringContaining('Skipped womp ids: 80643')
+      );
     });
   });
 
@@ -185,6 +256,7 @@ describe('Womptron Bot', () => {
       expect(result[0]).toHaveProperty('content');
       expect(result[0]).toHaveProperty('location');
       expect(result[0]).toHaveProperty('author');
+      expect(result[0]).toHaveProperty('coords');
       expect(result[0]).toHaveProperty('playUrl');
       expect(result[0]).toHaveProperty('imgSrc');
     });
@@ -225,7 +297,7 @@ describe('Womptron Bot', () => {
         },
       } as any);
 
-      mockTwitterClient.v1.uploadMedia.mockResolvedValueOnce(mockMediaId);
+      mockTwitterClient.v2.uploadMedia.mockResolvedValueOnce(mockMediaId);
       mockTwitterClient.v2.tweet.mockResolvedValueOnce({
         data: { id: 'tweet_123' },
       });
@@ -234,11 +306,10 @@ describe('Womptron Bot', () => {
       await tweetWomp(mockProcessedWomps[0], mockTwitterClient);
 
       expect(mockFetch).toHaveBeenCalledWith(mockProcessedWomps[0].imgSrc);
-      expect(mockTwitterClient.v1.uploadMedia).toHaveBeenCalledWith(
+      expect(mockTwitterClient.v2.uploadMedia).toHaveBeenCalledWith(
         mockImageBuffer,
         {
-          type: 'image/jpeg',
-          mimeType: 'image/jpeg',
+          media_type: 'image/jpeg',
         }
       );
       expect(mockTwitterClient.v2.tweet).toHaveBeenCalledWith({
@@ -262,7 +333,7 @@ describe('Womptron Bot', () => {
         },
       } as any);
 
-      mockTwitterClient.v1.uploadMedia.mockRejectedValueOnce(
+      mockTwitterClient.v2.uploadMedia.mockRejectedValueOnce(
         new Error('Upload failed')
       );
 
@@ -288,7 +359,7 @@ describe('Womptron Bot', () => {
         },
       } as any);
 
-      mockTwitterClient.v1.uploadMedia.mockResolvedValueOnce(mockMediaId);
+      mockTwitterClient.v2.uploadMedia.mockResolvedValueOnce(mockMediaId);
       mockTwitterClient.v2.tweet.mockResolvedValueOnce({
         data: { id: 'tweet_123' },
       });
@@ -296,7 +367,7 @@ describe('Womptron Bot', () => {
       const { tweetWomp } = require('../src/index');
       await tweetWomp(wompWithoutContent, mockTwitterClient);
 
-      expect(mockTwitterClient.v1.uploadMedia).toHaveBeenCalled();
+      expect(mockTwitterClient.v2.uploadMedia).toHaveBeenCalled();
       expect(mockTwitterClient.v2.tweet).toHaveBeenCalledWith({
         text: expect.any(String),
         media: { media_ids: [mockMediaId] },

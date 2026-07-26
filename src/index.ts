@@ -1,5 +1,5 @@
 import fetch from 'node-fetch';
-import { TwitterApi } from 'twitter-api-v2';
+import { type EUploadMimeType, TwitterApi } from 'twitter-api-v2';
 import { logger } from './logger';
 import { shortAddr, timeout, truncate } from './util';
 
@@ -7,6 +7,7 @@ export type Womp = {
   id: number;
   author: string;
   location: string;
+  coords: string;
   content: string;
   playUrl: string;
   imgSrc: string;
@@ -22,6 +23,30 @@ const {
 const WOMPTRON_INTERVAL = Number(process.env.WOMPTRON_INTERVAL ?? 60);
 const MILLISECONDS_PER_SECOND = 1000;
 const TWEET_DELAY_MS = 2000;
+
+/**
+ * X bills post creation per request, and a post containing a URL costs far
+ * more than one without:
+ *   $0.015 per post without a URL
+ *   $0.200 per post with a URL (13x)
+ *
+ * At the current womp rate (roughly 1.2 per day) that is about $0.54/month
+ * without links versus about $7.20/month with them. The coords now ride along
+ * in the location text instead, so a reader can still find the spot by typing
+ * them into Voxels. Set WOMPTRON_INCLUDE_URL=true to put the play link back
+ * and accept the higher bill.
+ */
+const WOMPTRON_INCLUDE_URL = process.env.WOMPTRON_INCLUDE_URL === 'true';
+const COST_PER_TWEET_USD = WOMPTRON_INCLUDE_URL ? 0.2 : 0.015;
+
+/**
+ * Ceiling on posts per run. Voxels is quiet today, but the womps API returns
+ * up to 50 per page, so a backfill or a traffic spike could otherwise bill an
+ * unbounded burst. Anything over the cap is dropped with a loud log line.
+ */
+const WOMPTRON_MAX_TWEETS_PER_RUN = Number(
+  process.env.WOMPTRON_MAX_TWEETS_PER_RUN ?? 5
+);
 
 // Create a function to get the client so it can be mocked in tests
 export const getTwitterClient = () => {
@@ -49,7 +74,7 @@ export const getTwitterClient = () => {
 const client = getTwitterClient();
 
 export const textForTweet = (womp: Womp) => {
-  const { content, location, author, playUrl } = womp;
+  const { content, location, coords, author, playUrl } = womp;
 
   const parts: string[] = [];
 
@@ -57,12 +82,22 @@ export const textForTweet = (womp: Womp) => {
     parts.push(`"${content}"`);
   }
 
-  if (location) {
-    parts.push(`at ${location}`);
+  // The coords used to reach the reader only through the play URL. With the
+  // URL gone by default they go in the location text, so the spot is still
+  // findable. A parcel with no name shows the coords alone.
+  let where = location;
+  if (coords) {
+    where = location ? `${location} (${coords})` : coords;
+  }
+  if (where) {
+    parts.push(`at ${where}`);
   }
 
   parts.push(`by ${author}`);
-  parts.push(playUrl);
+
+  if (WOMPTRON_INCLUDE_URL) {
+    parts.push(playUrl);
+  }
 
   return parts.join(' - ');
 };
@@ -83,11 +118,13 @@ export const tweetWomp = async (womp: Womp, twitterClient = client) => {
     // Get content type from response headers, fallback to image/jpeg
     const contentType = response.headers.get('content-type') || 'image/jpeg';
 
-    const mediaUploadResponse = await twitterClient.v1.uploadMedia(
+    // v2 media upload (POST /2/media/upload). The old v1.1 helper,
+    // twitterClient.v1.uploadMedia, still points at upload.x.com/1.1/ in
+    // twitter-api-v2 1.25.0, and X sunset that endpoint on 2025-06-09.
+    const mediaUploadResponse = await twitterClient.v2.uploadMedia(
       imageBuffer,
       {
-        type: contentType,
-        mimeType: contentType,
+        media_type: contentType as EUploadMimeType,
       }
     );
 
@@ -134,7 +171,16 @@ export const getWomps = async (): Promise<Womp[]> => {
       return [];
     }
 
-    // since WOMPTRON_INTERVAL
+    // Keep only womps created since the last tick. This is the whole dedupe
+    // story: there is no persistent record of what has already been posted.
+    // Two known consequences, both of which cost real money because every
+    // post is a billed request:
+    //   1. A restart re-tweets everything from the last WOMPTRON_INTERVAL
+    //      seconds, since the fresh process has no memory of the previous run.
+    //   2. A tick that runs slow (image fetch, upload, or the TWEET_DELAY_MS
+    //      spacing) can overlap the next one and double-post the overlap.
+    // Fixing this properly means persisting the last posted womp id somewhere
+    // that survives a restart. Until then, expect the occasional duplicate.
     womps = womps
       .filter(
         (w) =>
@@ -160,7 +206,7 @@ export const getWomps = async (): Promise<Womp[]> => {
       content = content.trim();
       content = truncate(content);
 
-      return { id, content, location, author, playUrl, imgSrc };
+      return { id, content, location, coords, author, playUrl, imgSrc };
     });
 
     return womps;
@@ -177,6 +223,28 @@ export const getWomps = async (): Promise<Womp[]> => {
     }
     return [];
   }
+};
+
+/**
+ * Trims a queue of womps (oldest first) down to WOMPTRON_MAX_TWEETS_PER_RUN,
+ * keeping the newest. Mutates the queue in place so callers holding the array
+ * see the trim, and logs what was dropped.
+ */
+export const applyTweetCap = (queue: Womp[]) => {
+  if (queue.length <= WOMPTRON_MAX_TWEETS_PER_RUN) {
+    return queue;
+  }
+
+  const skipped = queue.length - WOMPTRON_MAX_TWEETS_PER_RUN;
+  const dropped = queue.splice(0, skipped);
+  const costAvoided = (skipped * COST_PER_TWEET_USD).toFixed(3);
+
+  logger.warn(
+    `Tweet cap hit: ${queue.length + skipped} womps queued, tweeting the newest ${WOMPTRON_MAX_TWEETS_PER_RUN}, skipping ${skipped}. Estimated cost avoided: $${costAvoided}. Raise WOMPTRON_MAX_TWEETS_PER_RUN to post more.`
+  );
+  logger.warn(`Skipped womp ids: ${dropped.map((w) => w.id).join(', ')}`);
+
+  return queue;
 };
 
 export function main() {
@@ -206,6 +274,8 @@ export function main() {
     tweeting = true;
 
     try {
+      applyTweetCap(wompsToTweet);
+
       while (wompsToTweet.length > 0) {
         const womp = wompsToTweet.shift();
         if (womp) {

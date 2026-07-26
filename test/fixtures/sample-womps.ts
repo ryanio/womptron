@@ -60,6 +60,7 @@ export const mockProcessedWomps: Womp[] = [
     id: 80_643,
     content: 'nice',
     location: 'PIGGYBANK',
+    coords: 'E@247W,337N,5.5U',
     author: '0x889b44...57c8b',
     playUrl: 'https://voxels.com/play?coords=E@247W,337N,5.5U',
     imgSrc:
@@ -69,6 +70,7 @@ export const mockProcessedWomps: Womp[] = [
     id: 80_642,
     content: 'Pig Station elements',
     location: '25 Boots Crossing',
+    coords: 'SW@233W,343N,1U',
     author: '0x889b44...57c8b',
     playUrl: 'https://voxels.com/play?coords=SW@233W,343N,1U',
     imgSrc:
@@ -78,6 +80,7 @@ export const mockProcessedWomps: Womp[] = [
     id: 80_634,
     content: '<3',
     location: 'DIE GORGEOUS',
+    coords: 'S@75E,433S',
     author: 'AdoraTokyo',
     playUrl: 'https://voxels.com/play?coords=S@75E,433S',
     imgSrc:
