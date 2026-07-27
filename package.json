@@ -1,7 +1,7 @@
 {
   "name": "womptron",
   "version": "1.1.4",
-  "description": "A bot that tweets new womps from Cryptovoxels.",
+  "description": "A bot that posts new womps from Voxels to X.",
   "author": "Ryan Ghods <ryan@ryanio.com>",
   "license": "MIT",
   "engines": {
@@ -12,6 +12,8 @@
     "build": "npx tsc",
     "start": "node dist/index.js",
     "start:dev": "ts-node src/index.ts",
+    "check:api": "ts-node src/check-api.ts",
+    "check:api:refresh": "ts-node src/check-api.ts --refresh",
     "test": "jest",
     "test:ci": "jest --ci --coverage --watchAll=false --maxWorkers=50%",
     "test:coverage": "jest --coverage --maxWorkers=50%",

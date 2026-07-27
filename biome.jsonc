@@ -30,7 +30,7 @@
   },
   "overrides": [
     {
-      // The Twitter/womp API mocks are typed loosely on purpose.
+      // The X and womp API mocks are typed loosely on purpose.
       "includes": [
         "test/**/*.ts",
         "test/**/*.js",

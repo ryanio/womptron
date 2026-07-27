@@ -1,0 +1,69 @@
+name: Check the Voxels API shape
+
+# A canary, deliberately separate from the posting workflow so it can never
+# stop womptron from posting and a Voxels outage can never turn the posting run
+# red by proxy.
+#
+# The Voxels womps feed has changed shape under us before (author went from a
+# wallet string plus a top-level author_name to an object with name and owner)
+# and the bot posted nothing for as long as it took a human to notice. This job
+# fetches the live feed once a day and runs it through the bot's own parser. If
+# the shape moved, this check goes red and the log says which field moved.
+#
+# Reproduce locally with one command:
+#   yarn check:api
+# and recapture the fixture with:
+#   yarn check:api --refresh
+#
+# check:api exits 0 when the API is simply unreachable, so a CDN hiccup does
+# not cry wolf. Only an actual shape change fails it.
+
+on:
+  schedule:
+    # Once a day is plenty. A shape change is not an emergency, it just needs
+    # to be visible within a day rather than whenever someone happens to look.
+    - cron: "17 6 * * *"
+  workflow_dispatch:
+  push:
+    # Re-check whenever the parser or the captured fixtures change, since that
+    # is exactly when someone is trying to confirm they got the shape right.
+    paths:
+      - "src/womps.ts"
+      - "src/check-api.ts"
+      - "test/fixtures/**"
+      - ".github/workflows/check-api.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "22"
+          cache: yarn
+
+      - run: yarn install --frozen-lockfile
+
+      # No X credentials here on purpose: src/check-api.ts imports only the
+      # parser, never the posting path, so this job cannot post anything.
+      - name: Compare the live feed against the parser and the fixtures
+        run: |
+          set +e
+          yarn check:api 2>&1 | tee /tmp/check-api.log
+          status=${PIPESTATUS[0]}
+          {
+            echo '```'
+            cat /tmp/check-api.log
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit "$status"
+
+      - name: Run the parser tests against the captured fixtures
+        run: yarn test

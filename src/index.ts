@@ -3,53 +3,46 @@
 import 'dotenv/config';
 import { type EUploadMimeType, TwitterApi } from 'twitter-api-v2';
 import { logger } from './logger';
-import { shortAddr, timeout, truncate } from './util';
+import { readState, writeState } from './state';
+import { timeout } from './util';
+import { getWomps, type Womp } from './womps';
 
-/** A womp as the Voxels API returns it, before normalisation. */
-interface ApiWomp {
-  author: string;
-  author_name?: string | null;
-  content?: string | null;
-  coords: string;
-  created_at: string;
-  id: number;
-  image_url: string;
-  parcel_address?: string | null;
-  parcel_name?: string | null;
-}
-
-interface WompsApiResponse {
-  womps?: ApiWomp[];
-}
-
-export interface Womp {
-  author: string;
-  content: string;
-  coords: string;
-  id: number;
-  imgSrc: string;
-  location: string;
-  playUrl: string;
-}
-
-const {
-  TWITTER_CONSUMER_KEY,
-  TWITTER_CONSUMER_SECRET,
-  TWITTER_ACCESS_TOKEN,
-  TWITTER_ACCESS_TOKEN_SECRET,
-} = process.env;
+export type { Womp } from './womps';
 
 /**
- * Dedupe window, in seconds. There is no persistent record of what has been
- * posted, so each run tweets womps created in the last WOMPTRON_INTERVAL
- * seconds. It MUST match the cron period in .github/workflows/tweet.yml
- * (15 minutes = 900). Too small and womps fall through the gap between runs;
- * too large and consecutive runs overlap and re-post, and every duplicate is a
- * billed request.
+ * Credentials. The X_* names are the current ones; the TWITTER_* names are what
+ * the GitHub Actions secrets in ryanio/womptron are still called, and what an
+ * older local .env will have. X_* wins where both are set, so an operator can
+ * migrate the secrets one at a time without a flag day. Nothing here needs the
+ * new names to exist.
+ *
+ * The npm package is still called twitter-api-v2 and its API surface is still
+ * v2.tweet / v2.uploadMedia. Those are third party and stay as they are.
  */
-const WOMPTRON_INTERVAL = Number(process.env.WOMPTRON_INTERVAL ?? 900);
+const credential = (name: string) =>
+  process.env[`X_${name}`] ?? process.env[`TWITTER_${name}`];
+
+const X_CONSUMER_KEY = credential('CONSUMER_KEY');
+const X_CONSUMER_SECRET = credential('CONSUMER_SECRET');
+const X_ACCESS_TOKEN = credential('ACCESS_TOKEN');
+const X_ACCESS_TOKEN_SECRET = credential('ACCESS_TOKEN_SECRET');
+
 const MILLISECONDS_PER_SECOND = 1000;
-const TWEET_DELAY_MS = 2000;
+const POST_DELAY_MS = 2000;
+
+/**
+ * Staleness ceiling, in seconds. This used to be the whole dedupe mechanism,
+ * and it had to match the cron period exactly. It does not any more: the last
+ * posted womp id in .womptron-state is the real dedupe, and it does not care
+ * when or whether a scheduled run fires.
+ *
+ * What the interval still buys is a bound on how old a womp can be and still
+ * get posted. If the workflow is disabled for a week and then re-enabled, the
+ * stored id makes every womp from that week "new", and posting a seven day old
+ * womp as news is wrong. Anything older than this is skipped, and the stored
+ * id still advances past it so it is not reconsidered.
+ */
+const WOMPTRON_INTERVAL = Number(process.env.WOMPTRON_INTERVAL ?? 86_400);
 
 /**
  * X bills post creation per request, and a post containing a URL costs far
@@ -64,43 +57,47 @@ const TWEET_DELAY_MS = 2000;
  * and accept the higher bill.
  */
 const WOMPTRON_INCLUDE_URL = process.env.WOMPTRON_INCLUDE_URL === 'true';
-const COST_PER_TWEET_USD = WOMPTRON_INCLUDE_URL ? 0.2 : 0.015;
+const COST_PER_POST_USD = WOMPTRON_INCLUDE_URL ? 0.2 : 0.015;
 
 /**
  * Ceiling on posts per run. Voxels is quiet today, but the womps API returns
  * up to 50 per page, so a backfill or a traffic spike could otherwise bill an
  * unbounded burst. Anything over the cap is dropped with a loud log line.
+ *
+ * WOMPTRON_MAX_TWEETS_PER_RUN is the previous name, still read as a fallback.
  */
-const WOMPTRON_MAX_TWEETS_PER_RUN = Number(
-  process.env.WOMPTRON_MAX_TWEETS_PER_RUN ?? 5
+const WOMPTRON_MAX_POSTS_PER_RUN = Number(
+  process.env.WOMPTRON_MAX_POSTS_PER_RUN ??
+    process.env.WOMPTRON_MAX_TWEETS_PER_RUN ??
+    5
 );
 
 // Create a function to get the client so it can be mocked in tests
-export const getTwitterClient = () => {
+export const getXClient = () => {
   if (
     !(
-      TWITTER_CONSUMER_KEY &&
-      TWITTER_CONSUMER_SECRET &&
-      TWITTER_ACCESS_TOKEN &&
-      TWITTER_ACCESS_TOKEN_SECRET
+      X_CONSUMER_KEY &&
+      X_CONSUMER_SECRET &&
+      X_ACCESS_TOKEN &&
+      X_ACCESS_TOKEN_SECRET
     )
   ) {
     throw new Error(
-      'Missing required Twitter API credentials in environment variables'
+      'Missing required X API credentials. Set X_CONSUMER_KEY, X_CONSUMER_SECRET, X_ACCESS_TOKEN and X_ACCESS_TOKEN_SECRET (the older TWITTER_* names are also accepted).'
     );
   }
 
   return new TwitterApi({
-    appKey: TWITTER_CONSUMER_KEY,
-    appSecret: TWITTER_CONSUMER_SECRET,
-    accessToken: TWITTER_ACCESS_TOKEN,
-    accessSecret: TWITTER_ACCESS_TOKEN_SECRET,
+    appKey: X_CONSUMER_KEY,
+    appSecret: X_CONSUMER_SECRET,
+    accessToken: X_ACCESS_TOKEN,
+    accessSecret: X_ACCESS_TOKEN_SECRET,
   });
 };
 
-const client = getTwitterClient();
+const client = getXClient();
 
-export const textForTweet = (womp: Womp) => {
+export const textForPost = (womp: Womp) => {
   const { content, location, coords, author, playUrl } = womp;
 
   const parts: string[] = [];
@@ -129,7 +126,9 @@ export const textForTweet = (womp: Womp) => {
   return parts.join(' - ');
 };
 
-export const tweetWomp = async (womp: Womp, twitterClient = client) => {
+/** Posts one womp. Returns whether it went out, so the caller can decide
+ * whether to advance the stored id past it. */
+export const postWomp = async (womp: Womp, xClient = client) => {
   try {
     // Fetch image directly
     const response = await fetch(womp.imgSrc);
@@ -146,173 +145,192 @@ export const tweetWomp = async (womp: Womp, twitterClient = client) => {
     const contentType = response.headers.get('content-type') || 'image/jpeg';
 
     // v2 media upload (POST /2/media/upload). The old v1.1 helper,
-    // twitterClient.v1.uploadMedia, still points at upload.x.com/1.1/ in
+    // xClient.v1.uploadMedia, still points at upload.x.com/1.1/ in
     // twitter-api-v2 1.25.0, and X sunset that endpoint on 2025-06-09.
-    const mediaUploadResponse = await twitterClient.v2.uploadMedia(
-      imageBuffer,
-      {
-        media_type: contentType as EUploadMimeType,
-      }
-    );
+    const mediaUploadResponse = await xClient.v2.uploadMedia(imageBuffer, {
+      media_type: contentType as EUploadMimeType,
+    });
 
-    // Create tweet using v2 API (works with Basic tier)
-    await twitterClient.v2.tweet({
-      text: textForTweet(womp),
+    await xClient.v2.tweet({
+      text: textForPost(womp),
       media: { media_ids: [mediaUploadResponse] },
     });
 
-    logger.info(`Tweeted womp #${womp.id}: ${textForTweet(womp)}`);
+    logger.info(`Posted womp #${womp.id}: ${textForPost(womp)}`);
+    return true;
   } catch (error) {
     const errorMessage =
       error instanceof Error
         ? `${error.name}: ${error.message}`
         : String(error);
-    logger.error(`Error tweeting: ${errorMessage}`);
+    logger.error(`Error posting womp #${womp.id}: ${errorMessage}`);
 
     // Log additional error details if available
     if (error instanceof Error && error.stack) {
       logger.debug(`Stack trace: ${error.stack}`);
     }
-  }
-};
-
-export const getWomps = async (): Promise<Womp[]> => {
-  try {
-    const response = await fetch(
-      `https://www.voxels.com/api/womps.json?${Date.now()}`
-    );
-
-    if (!response.ok) {
-      const errorDetails = await response.text();
-      logger.error(`Fetch Error - ${response.status}: ${response.statusText}`);
-      logger.debug('Response details:', { errorDetails });
-      return [];
-    }
-
-    const result = (await response.json()) as WompsApiResponse;
-    const { womps } = result;
-
-    if (!womps || womps.length === 0) {
-      logger.error('No womps returned');
-      logger.debug('API response:', { result });
-      return [];
-    }
-
-    // Keep only womps created within the dedupe window. This is the whole
-    // dedupe story: nothing records what has already been posted, so a rerun
-    // of the same period re-tweets it, and every duplicate is a billed
-    // request. Fixing that properly means persisting the last posted womp id
-    // somewhere that survives the job. Until then, expect the occasional
-    // duplicate.
-    const recent = womps
-      .filter(
-        (w) =>
-          new Date(w.created_at).getTime() >
-          Date.now() - WOMPTRON_INTERVAL * MILLISECONDS_PER_SECOND
-      )
-      .reverse();
-
-    return recent.map((womp): Womp => {
-      const { id, image_url: imgSrc, coords } = womp;
-      const author = womp.author_name ?? shortAddr(womp.author);
-      const playUrl = `https://voxels.com/play?coords=${coords}`;
-
-      let content = womp.content ?? '';
-      let location = womp.parcel_name ?? womp.parcel_address ?? '';
-
-      // remove unsolicited mentions by removing @ symbol
-      const search =
-        /(^|\s|\n|\^|\(|\)|\{|\}|\[|\]|\+|-|\\|\/|\.|,|\|||<|>|\?|'|"|:|;)@(\w*)/g;
-      content = content.replace(search, '$1$2');
-      location = location.replace(search, '$1$2');
-
-      content = content.trim();
-      content = truncate(content);
-
-      return { id, content, location, coords, author, playUrl, imgSrc };
-    });
-  } catch (error) {
-    const errorMessage =
-      error instanceof Error
-        ? `${error.name}: ${error.message}`
-        : String(error);
-    logger.error(`Fetch Error: ${errorMessage}`);
-
-    // Log additional error details if available
-    if (error instanceof Error && error.stack) {
-      logger.debug(`Stack trace: ${error.stack}`);
-    }
-    return [];
+    return false;
   }
 };
 
 /**
- * Trims a queue of womps (oldest first) down to WOMPTRON_MAX_TWEETS_PER_RUN,
+ * Trims a queue of womps (oldest first) down to WOMPTRON_MAX_POSTS_PER_RUN,
  * keeping the newest. Mutates the queue in place so callers holding the array
  * see the trim, and logs what was dropped.
  */
-export const applyTweetCap = (queue: Womp[]) => {
-  if (queue.length <= WOMPTRON_MAX_TWEETS_PER_RUN) {
+export const applyPostCap = (queue: Womp[]) => {
+  if (queue.length <= WOMPTRON_MAX_POSTS_PER_RUN) {
     return queue;
   }
 
-  const skipped = queue.length - WOMPTRON_MAX_TWEETS_PER_RUN;
+  const skipped = queue.length - WOMPTRON_MAX_POSTS_PER_RUN;
   const dropped = queue.splice(0, skipped);
-  const costAvoided = (skipped * COST_PER_TWEET_USD).toFixed(3);
+  const costAvoided = (skipped * COST_PER_POST_USD).toFixed(3);
 
   logger.warn(
-    `Tweet cap hit: ${queue.length + skipped} womps queued, tweeting the newest ${WOMPTRON_MAX_TWEETS_PER_RUN}, skipping ${skipped}. Estimated cost avoided: $${costAvoided}. Raise WOMPTRON_MAX_TWEETS_PER_RUN to post more.`
+    `Post cap hit: ${queue.length + skipped} womps queued, posting the newest ${WOMPTRON_MAX_POSTS_PER_RUN}, skipping ${skipped}. Estimated cost avoided: $${costAvoided}. Raise WOMPTRON_MAX_POSTS_PER_RUN to post more.`
   );
   logger.warn(`Skipped womp ids: ${dropped.map((w) => w.id).join(', ')}`);
 
   return queue;
 };
 
+export interface RunResult {
+  /** True when there was no stored id and this run only seeded one. */
+  coldStart: boolean;
+  /** Posts that were attempted and failed. Non-zero means a red run. */
+  failed: number;
+  /** Womps new by id but older than WOMPTRON_INTERVAL. */
+  skippedStale: number;
+  posted: number;
+}
+
+const emptyResult = (): RunResult => ({
+  coldStart: false,
+  failed: 0,
+  skippedStale: 0,
+  posted: 0,
+});
+
 /**
- * One pass: fetch, cap, tweet, resolve. Returns how many were posted.
+ * One pass: fetch, dedupe against the stored id, cap, post, store.
+ *
+ * Throws when the feed could not be fetched or parsed. That is deliberate: the
+ * caller turns a throw into a non-zero exit, so a broken API can never be
+ * mistaken for a quiet night. "Zero new womps" returns normally.
  *
  * Every send is awaited before the promise settles, so the process never exits
- * with tweets still in flight.
+ * with posts still in flight.
  */
-export async function runOnce(): Promise<number> {
-  const queue = await getWomps();
+export async function runOnce(): Promise<RunResult> {
+  const stored = readState();
+  const batch = await getWomps();
+  const result = emptyResult();
+
+  if (batch.newestId === null) {
+    logger.warn('No womps in the feed at all, leaving the stored id alone.');
+    return result;
+  }
+
+  if (stored === null) {
+    // Cold start. Seed from the newest womp and post nothing, so reviving the
+    // bot or losing the cache never dumps a backlog onto the timeline.
+    writeState(batch.newestId);
+    logger.info(
+      `Cold start: seeded the last posted womp id to ${batch.newestId} and posted nothing. The next run posts anything newer than that.`
+    );
+    result.coldStart = true;
+    return result;
+  }
+
+  if (batch.newestId < stored.lastWompId) {
+    // Either Voxels renumbered ids or the feed is serving something odd.
+    // Either way the bot would sit silent forever, which is the failure mode
+    // this rewrite exists to eliminate, so make it visible instead.
+    throw new Error(
+      `Stored womp id ${stored.lastWompId} is newer than anything in the feed (newest is ${batch.newestId}). The bot will post nothing until this is resolved. Delete ${JSON.stringify(process.env.WOMPTRON_STATE_FILE ?? '.womptron-state/last-womp-id.json')} to re-seed if the id space really did change.`
+    );
+  }
+
+  const oldestAllowed =
+    Date.now() - WOMPTRON_INTERVAL * MILLISECONDS_PER_SECOND;
+
+  // Oldest first, so the timeline reads in the order things happened.
+  const unposted = batch.womps
+    .filter((w) => w.id > stored.lastWompId)
+    .sort((a, b) => a.id - b.id);
+
+  const queue = unposted.filter((w) => w.createdAt >= oldestAllowed);
+  result.skippedStale = unposted.length - queue.length;
+
+  if (result.skippedStale > 0) {
+    logger.warn(
+      `Skipped ${result.skippedStale} womps that are new to us but older than WOMPTRON_INTERVAL (${WOMPTRON_INTERVAL}s).`
+    );
+  }
+
   if (queue.length === 0) {
     logger.info('No new womps');
-    return 0;
+    writeState(batch.newestId);
+    return result;
   }
 
   logger.info(`Found ${queue.length} new womps`);
-  applyTweetCap(queue);
+  applyPostCap(queue);
 
-  let posted = 0;
-  while (queue.length > 0) {
-    const womp = queue.shift();
-    if (!womp) {
-      continue;
-    }
+  // Advance the stored id only as far as we are confident. On a failure we
+  // stop the pass and leave the id behind the womp that failed, so the next
+  // run retries it instead of losing it.
+  let cursor = stored.lastWompId;
+  for (let i = 0; i < queue.length; i += 1) {
+    const womp = queue[i];
     // Sequential on purpose. X rate-limits post creation, and the pacing below
     // only means anything if the sends do not overlap.
-    await tweetWomp(womp);
-    posted += 1;
-    // Only pace between tweets, never after the last one. A trailing sleep is
+    const sent = await postWomp(womp);
+    if (!sent) {
+      result.failed += 1;
+      break;
+    }
+    result.posted += 1;
+    cursor = womp.id;
+    // Only pace between posts, never after the last one. A trailing sleep is
     // dead time a scheduled job pays for.
-    if (queue.length > 0) {
-      await timeout(TWEET_DELAY_MS);
+    if (i < queue.length - 1) {
+      await timeout(POST_DELAY_MS);
     }
   }
 
-  return posted;
+  // A clean pass means everything in the response is handled, including womps
+  // the cap dropped and womps skipped as stale, so jump straight to the newest.
+  writeState(result.failed === 0 ? batch.newestId : cursor);
+
+  return result;
 }
 
 // Only run if this file is executed directly (not imported in tests)
 if (require.main === module) {
   runOnce()
-    .then((posted) => {
-      logger.info(`Run complete, ${posted} tweeted`);
+    .then((result) => {
+      if (result.failed > 0) {
+        logger.error(
+          `Run finished with ${result.failed} failed post(s) after ${result.posted} successful. Exiting non-zero so this run is not mistaken for a quiet one.`
+        );
+        process.exit(1);
+      }
+      logger.info(
+        result.coldStart
+          ? 'Run complete, cold start seeded, 0 posted'
+          : `Run complete, ${result.posted} posted`
+      );
       process.exit(0);
     })
     .catch((error: unknown) => {
-      logger.error(`Run failed: ${String(error)}`);
+      logger.error(
+        `Run failed: ${error instanceof Error ? `${error.name}: ${error.message}` : String(error)}`
+      );
+      if (error instanceof Error && error.stack) {
+        logger.debug(`Stack trace: ${error.stack}`);
+      }
       process.exit(1);
     });
 }

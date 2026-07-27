@@ -1,0 +1,83 @@
+{
+  "_comment": [
+    "Hand-built breakage cases. Every entry except the last one must fail",
+    "parseWomp; the last one must survive, which is the whole point: one bad",
+    "womp is skipped with a warning, it does not take down the batch.",
+    "The shapes here are invented, unlike womps-current.json and",
+    "womps-legacy.json which are captured from the real API."
+  ],
+  "success": true,
+  "womps": [
+    null,
+    "not an object at all",
+    {
+      "author": {
+        "id": "019e38a7-9709-7dc2-bbb7-7658db564251",
+        "name": "no_id_womp",
+        "owner": "0x00a839de7922491683f547a67795204763ff8237"
+      },
+      "content": "missing the id field",
+      "coords": "NE@49E,242N",
+      "created_at": "2026-07-27T05:34:43.641Z",
+      "image_url": "https://media.crvox.com/womps/x/a.jpg"
+    },
+    {
+      "id": 99001,
+      "author": 12345,
+      "content": "author is a number, which is neither shape",
+      "coords": "NE@49E,242N",
+      "created_at": "2026-07-27T05:34:43.641Z",
+      "image_url": "https://media.crvox.com/womps/x/b.jpg"
+    },
+    {
+      "id": 99002,
+      "author": { "id": "019e38a7-0000-0000-0000-000000000000" },
+      "content": "author object with neither name nor owner",
+      "coords": "NE@49E,242N",
+      "created_at": "2026-07-27T05:34:43.641Z",
+      "image_url": "https://media.crvox.com/womps/x/c.jpg"
+    },
+    {
+      "id": 99003,
+      "author": {
+        "id": "019e38a7-9709-7dc2-bbb7-7658db564251",
+        "name": "no_image_womp",
+        "owner": "0x00a839de7922491683f547a67795204763ff8237"
+      },
+      "content": "no image_url, so there is nothing to post",
+      "coords": "NE@49E,242N",
+      "created_at": "2026-07-27T05:34:43.641Z"
+    },
+    {
+      "id": 99004,
+      "author": {
+        "id": "019e38a7-9709-7dc2-bbb7-7658db564251",
+        "name": "no_timestamp_womp",
+        "owner": "0x00a839de7922491683f547a67795204763ff8237"
+      },
+      "content": "created_at is not a date",
+      "coords": "NE@49E,242N",
+      "created_at": "sometime last tuesday",
+      "image_url": "https://media.crvox.com/womps/x/d.jpg"
+    },
+    {
+      "id": 99005,
+      "author": {
+        "id": "019e38a7-974c-7617-b51e-c07f216f053e",
+        "name": "survivor",
+        "owner": "0x27641a64101ff152539dc88c24e09ff36dc671c0",
+        "created_at": "2021-07-04T19:11:39.168777"
+      },
+      "content": "this one is fine and must still be posted",
+      "parcel_id": 7499,
+      "image_url": "https://media.crvox.com/womps/x/e.jpg",
+      "coords": "W@1838W,883S",
+      "created_at": "2026-07-27T05:40:00.000Z",
+      "updated_at": "2026-07-27T05:40:00.000Z",
+      "image_supplied": false,
+      "parcel_name": "Computer Arts Society",
+      "parcel_address": "5 Calle de la Vida",
+      "parcel_island": "Venice"
+    }
+  ]
+}

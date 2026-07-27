@@ -20,10 +20,20 @@ export function truncate(str: string, length = 180, ending = '…') {
 /**
  * Returns a shortened version of a full ethereum address
  * (e.g. 0x38a16…c7eb3)
+ *
+ * Takes the last five characters rather than a hardcoded 37..42 slice, so a
+ * string that is not exactly 42 characters comes back sensible instead of
+ * empty. Anything too short to shorten is returned unchanged.
  */
 const ADDR_PREFIX_LENGTH = 7;
-const ADDR_START_INDEX = 37;
-const ADDR_END_INDEX = 42;
+const ADDR_SUFFIX_LENGTH = 5;
 
-export const shortAddr = (addr: string) =>
-  `${addr.slice(0, ADDR_PREFIX_LENGTH)}…${addr.slice(ADDR_START_INDEX, ADDR_END_INDEX)}`;
+export const shortAddr = (addr: string) => {
+  if (typeof addr !== 'string') {
+    return String(addr);
+  }
+  if (addr.length <= ADDR_PREFIX_LENGTH + ADDR_SUFFIX_LENGTH) {
+    return addr;
+  }
+  return `${addr.slice(0, ADDR_PREFIX_LENGTH)}…${addr.slice(-ADDR_SUFFIX_LENGTH)}`;
+};

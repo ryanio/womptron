@@ -1,6 +1,9 @@
 node_modules
 dist
 env.txt
+# Last posted womp id. Restored and saved by the Actions cache in CI, and
+# written locally on every run. Never committed: the repo is not the store.
+.womptron-state
 # Local secrets, never commit
 .env
 .env.local

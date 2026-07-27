@@ -1,0 +1,105 @@
+name: Post new womps
+
+# Runs one pass every 30 minutes. This is the only way womptron runs.
+#
+# Dedupe is by stored womp id, not by clock. The bot keeps the last womp id it
+# posted in .womptron-state/, restored and saved by the Actions cache below, so
+# it does not matter when this fires or whether GitHub drops a scheduled event.
+# A run that fires an hour late picks up exactly what it missed.
+#
+# That is why the interval widened from */15 to */30. GitHub's scheduled events
+# are best effort and the shortest intervals are the ones dropped first under
+# load; with the temporal dedupe gone, a dropped run costs latency and nothing
+# else, so the tighter cron bought nothing but a higher chance of being skipped.
+# Voxels produces roughly 1.2 womps a day. Thirty minutes is still far more
+# often than needed.
+#
+# If the cache entry is lost (GitHub evicts caches unused for 7 days, or under
+# the 10 GB per-repo limit), the next run sees no stored id, treats it as a
+# cold start, seeds from the newest womp and posts nothing. Womps created
+# during the gap are skipped rather than dumped as a backlog. Running every 30
+# minutes keeps the entry warm, so eviction should only happen if this workflow
+# is disabled for a week.
+
+on:
+  schedule:
+    - cron: "*/30 * * * *"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Fetch and log without posting"
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+# Never let two passes overlap. Both would read the same stored id and post the
+# same womps, and every duplicate is a billed request.
+concurrency:
+  group: womptron-post
+  cancel-in-progress: false
+
+jobs:
+  post:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "22"
+          cache: yarn
+
+      - run: yarn install --frozen-lockfile
+
+      # Cache keys are immutable, so the key carries the run id and the
+      # restore-keys prefix picks up the most recent previous entry.
+      - name: Restore the last posted womp id
+        uses: actions/cache/restore@v4
+        with:
+          path: .womptron-state
+          key: womptron-state-${{ github.run_id }}
+          restore-keys: |
+            womptron-state-
+
+      - name: Post new womps
+        env:
+          # The GitHub secrets are still named TWITTER_*. The bot reads the X_*
+          # names first and falls back to TWITTER_*, and the expressions below
+          # do the same at the workflow level, so nothing breaks whether or not
+          # the secrets have been migrated. An unset secret is the empty string
+          # in an expression, which || treats as falsy.
+          X_CONSUMER_KEY: ${{ secrets.X_CONSUMER_KEY || secrets.TWITTER_CONSUMER_KEY }}
+          X_CONSUMER_SECRET: ${{ secrets.X_CONSUMER_SECRET || secrets.TWITTER_CONSUMER_SECRET }}
+          X_ACCESS_TOKEN: ${{ secrets.X_ACCESS_TOKEN || secrets.TWITTER_ACCESS_TOKEN }}
+          X_ACCESS_TOKEN_SECRET: ${{ secrets.X_ACCESS_TOKEN_SECRET || secrets.TWITTER_ACCESS_TOKEN_SECRET }}
+          # Staleness ceiling, in seconds. No longer tied to the cron period:
+          # the stored womp id is the dedupe. This only stops the bot posting
+          # something a day old as if it were news.
+          WOMPTRON_INTERVAL: "86400"
+          # A post containing a URL bills at $0.200 instead of $0.015.
+          WOMPTRON_INCLUDE_URL: "false"
+          # Ceiling per run, so a Voxels backfill cannot bill an unbounded burst.
+          WOMPTRON_MAX_POSTS_PER_RUN: "5"
+          LOG_LEVEL: INFO
+        run: |
+          if [ "${{ github.event.inputs.dry_run }}" = "true" ]; then
+            echo "Dry run: skipping the post step."
+            echo "Nothing was posted." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          yarn start
+
+      # Always save, even after a failed run. The file still holds whatever was
+      # restored, and re-saving keeps the cache entry from ageing out while the
+      # bot is broken. Losing the id is the one failure mode that silently
+      # skips womps, so it is worth being stubborn about.
+      - name: Save the last posted womp id
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: .womptron-state
+          key: womptron-state-${{ github.run_id }}
