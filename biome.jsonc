@@ -1,6 +1,40 @@
 {
-  "$schema": "https://biomejs.dev/schemas/2.2.2/schema.json",
-  "extends": ["ultracite"],
+  "$schema": "https://biomejs.dev/schemas/2.5.5/schema.json",
+  // Ultracite 7 dropped the bare "ultracite" entry point; its Biome presets
+  // now ship per-framework under ultracite/biome/*.
+  "extends": ["ultracite/biome/core", "ultracite/biome/jest"],
+  "javascript": {
+    "formatter": {
+      // Ultracite 7 switched its preset to double quotes. The codebase has
+      // always been single-quoted, so keep it that way rather than churn
+      // every string literal in the repo.
+      "quoteStyle": "single"
+    }
+  },
+  "assist": {
+    "actions": {
+      "source": {
+        // Object keys here are ordered to mean something: the Womp shape
+        // mirrors the upstream API, and the Twitter client options are grouped
+        // as key/secret pairs. Alphabetising them would only scramble that.
+        "useSortedKeys": "off"
+      }
+    }
+  },
+  "linter": {
+    "enabled": true,
+    "rules": {
+      "preset": "recommended",
+      "style": {
+        // The literals this rule flags are X's per-post prices, the dedupe
+        // window and the per-run post cap. They already sit in named,
+        // heavily commented constants at the top of src/index.ts, so hoisting
+        // them again would only put a layer of indirection between the number
+        // and the pricing note that explains it.
+        "noMagicNumbers": "off"
+      }
+    }
+  },
   "overrides": [
     {
       "includes": [
@@ -24,9 +58,6 @@
       },
       "linter": {
         "rules": {
-          "style": {
-            "noMagicNumbers": "off"
-          },
           "suspicious": {
             "noExplicitAny": "off"
           }

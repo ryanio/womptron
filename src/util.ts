@@ -12,7 +12,7 @@ export function timeout(ms: number) {
  */
 export function truncate(str: string, length = 180, ending = '…') {
   if (str.length > length) {
-    return str.substring(0, length - ending.length) + ending;
+    return str.slice(0, Math.max(0, length - ending.length)) + ending;
   }
   return str;
 }

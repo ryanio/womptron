@@ -6,29 +6,31 @@ import { logger } from './logger';
 import { shortAddr, timeout, truncate } from './util';
 
 /** A womp as the Voxels API returns it, before normalisation. */
-type ApiWomp = {
-  id: number;
-  created_at: string;
-  coords: string;
-  image_url: string;
+interface ApiWomp {
   author: string;
   author_name?: string | null;
   content?: string | null;
-  parcel_name?: string | null;
-  parcel_address?: string | null;
-};
-
-type WompsApiResponse = { womps?: ApiWomp[] };
-
-export type Womp = {
-  id: number;
-  author: string;
-  location: string;
   coords: string;
+  created_at: string;
+  id: number;
+  image_url: string;
+  parcel_address?: string | null;
+  parcel_name?: string | null;
+}
+
+interface WompsApiResponse {
+  womps?: ApiWomp[];
+}
+
+export interface Womp {
+  author: string;
   content: string;
-  playUrl: string;
+  coords: string;
+  id: number;
   imgSrc: string;
-};
+  location: string;
+  playUrl: string;
+}
 
 const {
   TWITTER_CONSUMER_KEY,
@@ -274,7 +276,7 @@ export const applyTweetCap = (queue: Womp[]) => {
  */
 export async function runOnce(): Promise<number> {
   const queue = await getWomps();
-  if (!queue || queue.length === 0) {
+  if (queue.length === 0) {
     logger.info('No new womps');
     return 0;
   }
@@ -288,6 +290,9 @@ export async function runOnce(): Promise<number> {
     if (!womp) {
       continue;
     }
+    // Sequential on purpose. X rate-limits post creation, and the pacing below
+    // only means anything if the sends do not overlap.
+    // biome-ignore lint/performance/noAwaitInLoops: posts must go out one at a time
     await tweetWomp(womp);
     posted += 1;
     // Only pace between tweets, never after the last one. A trailing sleep is

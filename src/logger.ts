@@ -12,12 +12,12 @@ export const LogLevel = {
 
 export type LogLevel = (typeof LogLevel)[keyof typeof LogLevel];
 
-export type Logger = {
-  error: (message: string, ...args: unknown[]) => void;
-  warn: (message: string, ...args: unknown[]) => void;
-  info: (message: string, ...args: unknown[]) => void;
+export interface Logger {
   debug: (message: string, ...args: unknown[]) => void;
-};
+  error: (message: string, ...args: unknown[]) => void;
+  info: (message: string, ...args: unknown[]) => void;
+  warn: (message: string, ...args: unknown[]) => void;
+}
 
 class WomptronLogger implements Logger {
   private readonly logLevel: LogLevel;
