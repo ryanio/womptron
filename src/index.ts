@@ -52,6 +52,21 @@ const WOMPTRON_MAX_TWEETS_PER_RUN = Number(
   process.env.WOMPTRON_MAX_TWEETS_PER_RUN ?? 5
 );
 
+/**
+ * One-shot mode, for running under a scheduler instead of as a daemon.
+ *
+ * The default behaviour is a resident process on a setInterval, which is what
+ * the droplet ran. Under a scheduler (GitHub Actions cron and the like) the
+ * process has to do one pass and exit, or the job hangs until it is killed.
+ *
+ * Set WOMPTRON_INTERVAL to match the scheduler's period when using this, since
+ * the interval doubles as the dedupe window: each pass keeps womps created in
+ * the last WOMPTRON_INTERVAL seconds. A 15 minute cron wants 900. Too small and
+ * womps fall through the gap between runs; too large and the overlap re-posts
+ * womps that were already tweeted, and every duplicate is a billed request.
+ */
+const WOMPTRON_RUN_ONCE = process.env.WOMPTRON_RUN_ONCE === 'true';
+
 // Create a function to get the client so it can be mocked in tests
 export const getTwitterClient = () => {
   if (
@@ -308,7 +323,55 @@ export function main() {
   return interval;
 }
 
-// Only run main if this file is executed directly (not imported in tests)
+/**
+ * One pass: fetch, cap, tweet, resolve. Returns how many were posted.
+ *
+ * This is `main`'s run plus tweet loop, minus the timer and the semaphore.
+ * `main` fires `tweetWomps` without awaiting it, which is fine for a daemon and
+ * wrong for a scheduler: the process would exit mid-queue with tweets still in
+ * flight. Here every send is awaited before the promise settles.
+ */
+export async function runOnce(): Promise<number> {
+  const queue = await getWomps();
+  if (!queue || queue.length === 0) {
+    logger.info('No new womps');
+    return 0;
+  }
+
+  logger.info(`Found ${queue.length} new womps`);
+  applyTweetCap(queue);
+
+  let posted = 0;
+  while (queue.length > 0) {
+    const womp = queue.shift();
+    if (!womp) {
+      continue;
+    }
+    await tweetWomp(womp);
+    posted += 1;
+    // Only pace between tweets, never after the last one. A trailing sleep is
+    // dead time a scheduled job pays for.
+    if (queue.length > 0) {
+      await timeout(TWEET_DELAY_MS);
+    }
+  }
+
+  return posted;
+}
+
+// Only run if this file is executed directly (not imported in tests)
 if (require.main === module) {
-  main();
+  if (WOMPTRON_RUN_ONCE) {
+    runOnce()
+      .then((posted) => {
+        logger.info(`Run complete, ${posted} tweeted`);
+        process.exit(0);
+      })
+      .catch((error: unknown) => {
+        logger.error(`Run failed: ${String(error)}`);
+        process.exit(1);
+      });
+  } else {
+    main();
+  }
 }
