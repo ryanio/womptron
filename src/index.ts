@@ -1,3 +1,7 @@
+// Loads .env before anything reads process.env. On the old droplet the
+// environment came from /etc/profile via bot-runner, so there was nothing to
+// load; running this anywhere else needs a real file.
+import 'dotenv/config';
 import fetch from 'node-fetch';
 import { type EUploadMimeType, TwitterApi } from 'twitter-api-v2';
 import { logger } from './logger';

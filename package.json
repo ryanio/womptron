@@ -20,6 +20,7 @@
     "lint": "ultracite lint && npx tsc --noEmit -p tsconfig.build.json"
   },
   "dependencies": {
+    "dotenv": "^17.4.2",
     "file-api": "^0.10.4",
     "node-fetch": "^2.6.7",
     "twitter-api-v2": "^1.17.2"
