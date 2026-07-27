@@ -97,33 +97,51 @@ export const getXClient = () => {
 
 const client = getXClient();
 
+/**
+ * Two lines: a sentence, then the coords on their own.
+ *
+ * The image is the post. The text is a caption, so it reads as prose rather
+ * than as a dash-delimited record. Captions are often three characters ("666"),
+ * and the old ` - ` join spent three separators framing them.
+ *
+ * The second line is a host-less path (`/play?coords=NE@49E,242N`). Paste it
+ * after voxels.com and it is the same link the bot used to post. It sits alone
+ * so it is easy to select, and it is the last thing in the post so a client
+ * truncating the text loses the least useful part.
+ *
+ * That shape is also what keeps this affordable. X bills $0.200 for a post
+ * containing a URL against $0.015 without, and a path with no scheme and no
+ * host is not one. Verified against a live post: X returned zero url entities
+ * for exactly this string, and did not read the `@` in the coords as a mention
+ * either, since it sits between letters rather than at a word boundary.
+ *
+ * Do not prepend `voxels.com`. That is a real domain with a real TLD, and it
+ * flips every post to the higher rate. `WOMPTRON_INCLUDE_URL=true` does exactly
+ * that, deliberately, for anyone who wants the clickable link and will pay for
+ * it.
+ */
 export const textForPost = (womp: Womp) => {
   const { content, location, coords, author, playUrl } = womp;
 
-  const parts: string[] = [];
-
-  if (content) {
-    parts.push(`"${content}"`);
+  // Every clause is optional except the byline, so build the sentence from
+  // whatever this womp actually has rather than emitting empty scaffolding.
+  let sentence = content ? `"${content}"` : '';
+  if (location) {
+    sentence += sentence ? ` at ${location},` : `At ${location},`;
+  } else if (sentence) {
+    sentence += ',';
   }
+  sentence += sentence ? ` by ${author}` : `By ${author}`;
 
-  // The coords used to reach the reader only through the play URL. With the
-  // URL gone by default they go in the location text, so the spot is still
-  // findable. A parcel with no name shows the coords alone.
-  let where = location;
-  if (coords) {
-    where = location ? `${location} (${coords})` : coords;
-  }
-  if (where) {
-    parts.push(`at ${where}`);
-  }
+  const trailer = coords
+    ? WOMPTRON_INCLUDE_URL
+      ? playUrl
+      : `/play?coords=${coords}`
+    : WOMPTRON_INCLUDE_URL
+      ? playUrl
+      : '';
 
-  parts.push(`by ${author}`);
-
-  if (WOMPTRON_INCLUDE_URL) {
-    parts.push(playUrl);
-  }
-
-  return parts.join(' - ');
+  return trailer ? `${sentence}\n${trailer}` : sentence;
 };
 
 /** Posts one womp. Returns whether it went out, so the caller can decide

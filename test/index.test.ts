@@ -196,8 +196,9 @@ describe('textForPost', () => {
   test('formats post text correctly', () => {
     const { textForPost } = require('../src/index');
 
+    // A sentence, then the coords alone on the second line.
     expect(textForPost(sampleWomp())).toBe(
-      '"nice" - at PIGGYBANK (E@247W,337N,5.5U) - by 0x889b4…57c8b'
+      '"nice" at PIGGYBANK, by 0x889b4…57c8b\n/play?coords=E@247W,337N,5.5U'
     );
   });
 
@@ -217,7 +218,10 @@ describe('textForPost', () => {
 
     const result = textForPost({ ...sampleWomp(), content: '' });
 
-    expect(result).toBe('at PIGGYBANK (E@247W,337N,5.5U) - by 0x889b4…57c8b');
+    // The sentence starts at the location, capitalised, with no empty quotes.
+    expect(result).toBe(
+      'At PIGGYBANK, by 0x889b4…57c8b\n/play?coords=E@247W,337N,5.5U'
+    );
     expect(result).not.toContain('""');
   });
 
@@ -226,9 +230,13 @@ describe('textForPost', () => {
 
     const result = textForPost({ ...sampleWomp(), location: '' });
 
-    // With no parcel name the coords stand in as the location
-    expect(result).toBe('"nice" - at E@247W,337N,5.5U - by 0x889b4…57c8b');
-    expect(result).not.toContain('at  -');
+    // No parcel name means no "at" clause at all. The coords still carry the
+    // location on the second line, so nothing is lost.
+    expect(result).toBe(
+      '"nice", by 0x889b4…57c8b\n/play?coords=E@247W,337N,5.5U'
+    );
+    expect(result).not.toContain('at ,');
+    expect(result).not.toContain('at  ');
   });
 
   test('handles both empty content and location', () => {
@@ -241,7 +249,9 @@ describe('textForPost', () => {
       location: '',
     });
 
-    expect(result).toBe('by 0x889b4…57c8b');
+    // Nothing left but the byline, so it opens the sentence and is capitalised.
+    expect(result).toBe('By 0x889b4…57c8b');
+    expect(result).not.toContain('\n');
   });
 
   test('omits the play URL by default', () => {
@@ -253,6 +263,22 @@ describe('textForPost', () => {
     expect(result).toContain('E@247W,337N,5.5U');
   });
 
+  test('the coords line carries no scheme and no host, which is what keeps it cheap', () => {
+    const { textForPost } = require('../src/index');
+
+    const trailer = textForPost(sampleWomp()).split('\n')[1];
+
+    // X bills $0.200 for a post containing a URL against $0.015 without. A
+    // path with no scheme and no host is not one, verified against a live
+    // post that came back with zero url entities. Any of these creeping in
+    // would 13x every post silently, so assert their absence rather than
+    // trusting the format string not to drift.
+    expect(trailer).toBe('/play?coords=E@247W,337N,5.5U');
+    expect(trailer).not.toContain('://');
+    expect(trailer).not.toContain('voxels.com');
+    expect(trailer).not.toMatch(/[a-z0-9-]+\.[a-z]{2,}/i);
+  });
+
   test('includes the play URL when WOMPTRON_INCLUDE_URL is true', () => {
     let result = '';
 
@@ -261,8 +287,9 @@ describe('textForPost', () => {
       result = textForPost(sampleWomp());
     });
 
+    // The opt-in path swaps the host-less path for the real URL, and pays 13x.
     expect(result).toBe(
-      '"nice" - at PIGGYBANK (E@247W,337N,5.5U) - by 0x889b4…57c8b - https://voxels.com/play?coords=E@247W,337N,5.5U'
+      '"nice" at PIGGYBANK, by 0x889b4…57c8b\nhttps://voxels.com/play?coords=E@247W,337N,5.5U'
     );
   });
 });
