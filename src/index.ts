@@ -292,7 +292,6 @@ export async function runOnce(): Promise<number> {
     }
     // Sequential on purpose. X rate-limits post creation, and the pacing below
     // only means anything if the sends do not overlap.
-    // biome-ignore lint/performance/noAwaitInLoops: posts must go out one at a time
     await tweetWomp(womp);
     posted += 1;
     // Only pace between tweets, never after the last one. A trailing sleep is

@@ -16,8 +16,8 @@
     "test:ci": "jest --ci --coverage --watchAll=false --maxWorkers=50%",
     "test:coverage": "jest --coverage --maxWorkers=50%",
     "test:watch": "jest --watch",
-    "format": "ultracite fix --unsafe && npx tsc --noEmit -p tsconfig.build.json",
-    "lint": "ultracite check && npx tsc --noEmit -p tsconfig.build.json"
+    "format": "npx biome check --write && npx tsc --noEmit -p tsconfig.build.json",
+    "lint": "npx biome check && npx tsc --noEmit -p tsconfig.build.json"
   },
   "dependencies": {
     "dotenv": "^17.4.2",
@@ -31,12 +31,11 @@
     "lint-staged": "^16.1.5",
     "ts-jest": "^29.1.1",
     "ts-node": "^10.2.1",
-    "typescript": "^5.7.2",
-    "ultracite": "7.9.4"
+    "typescript": "^5.7.2"
   },
   "lint-staged": {
     "*.{js,jsx,ts,tsx,json,jsonc,css,scss,md,mdx}": [
-      "ultracite fix"
+      "biome check --write --no-errors-on-unmatched"
     ]
   },
   "jest": {
