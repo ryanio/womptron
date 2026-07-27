@@ -1,6 +1,6 @@
 name: Tweet new womps
 
-# Runs one pass every 15 minutes instead of holding a resident process.
+# Runs one pass every 15 minutes. This is the only way womptron runs.
 #
 # womptron keeps no state between runs. Dedupe is purely temporal: each pass
 # tweets womps created in the last WOMPTRON_INTERVAL seconds. That is why the
@@ -56,7 +56,6 @@ jobs:
           TWITTER_CONSUMER_SECRET: ${{ secrets.TWITTER_CONSUMER_SECRET }}
           TWITTER_ACCESS_TOKEN: ${{ secrets.TWITTER_ACCESS_TOKEN }}
           TWITTER_ACCESS_TOKEN_SECRET: ${{ secrets.TWITTER_ACCESS_TOKEN_SECRET }}
-          WOMPTRON_RUN_ONCE: "true"
           # Must equal the cron period above, in seconds.
           WOMPTRON_INTERVAL: "900"
           # A post containing a URL bills at $0.200 instead of $0.015.

@@ -3,7 +3,6 @@ import { mockApiResponse, mockProcessedWomps } from './fixtures/sample-womps';
 
 // Mock external dependencies
 jest.mock('twitter-api-v2');
-jest.mock('node-fetch');
 jest.mock('../src/util');
 jest.mock('../src/logger');
 
@@ -55,9 +54,9 @@ describe('Womptron Bot', () => {
       () => mockTwitterClient
     );
 
-    // Mock fetch
-    const nodeFetch = require('node-fetch');
-    mockFetch = nodeFetch as jest.MockedFunction<typeof fetch>;
+    // Mock the global fetch Node provides
+    mockFetch = jest.fn() as jest.MockedFunction<typeof fetch>;
+    global.fetch = mockFetch;
 
     // Mock util functions
     const mockUtil = require('../src/util');
@@ -149,9 +148,7 @@ describe('Womptron Bot', () => {
       const result = textForTweet(wompWithoutLocation);
 
       // With no parcel name the coords stand in as the location
-      expect(result).toBe(
-        '"nice" - at E@247W,337N,5.5U - by 0x889b44...57c8b'
-      );
+      expect(result).toBe('"nice" - at E@247W,337N,5.5U - by 0x889b44...57c8b');
       expect(result).not.toContain('at  -');
     });
 
@@ -286,12 +283,13 @@ describe('Womptron Bot', () => {
   describe('Tweet Creation', () => {
     test('should handle successful tweet creation', async () => {
       const mockMediaId = 'mock_media_id_123';
-      const mockImageBuffer = Buffer.from('fake_image_data');
+      const mockImageBytes = new TextEncoder().encode('fake_image_data');
+      const mockImageBuffer = Buffer.from(mockImageBytes);
 
       // Mock fetch for image download
       mockFetch.mockResolvedValueOnce({
         ok: true,
-        buffer: jest.fn().mockResolvedValue(mockImageBuffer),
+        arrayBuffer: jest.fn().mockResolvedValue(mockImageBytes.buffer),
         headers: {
           get: jest.fn().mockReturnValue('image/jpeg'),
         },
@@ -322,12 +320,12 @@ describe('Womptron Bot', () => {
     });
 
     test('should handle tweet errors gracefully', async () => {
-      const mockImageBuffer = Buffer.from('fake_image_data');
+      const mockImageBytes = new TextEncoder().encode('fake_image_data');
 
       // Mock fetch for image download
       mockFetch.mockResolvedValueOnce({
         ok: true,
-        buffer: jest.fn().mockResolvedValue(mockImageBuffer),
+        arrayBuffer: jest.fn().mockResolvedValue(mockImageBytes.buffer),
         headers: {
           get: jest.fn().mockReturnValue('image/jpeg'),
         },
@@ -347,13 +345,13 @@ describe('Womptron Bot', () => {
 
     test('should tweet with media using v2 API', async () => {
       const mockMediaId = 'mock_media_id_123';
-      const mockImageBuffer = Buffer.from('fake_image_data');
+      const mockImageBytes = new TextEncoder().encode('fake_image_data');
       const wompWithoutContent = { ...mockProcessedWomps[0], content: '' };
 
       // Mock fetch for image download
       mockFetch.mockResolvedValueOnce({
         ok: true,
-        buffer: jest.fn().mockResolvedValue(mockImageBuffer),
+        arrayBuffer: jest.fn().mockResolvedValue(mockImageBytes.buffer),
         headers: {
           get: jest.fn().mockReturnValue('image/jpeg'),
         },
@@ -372,6 +370,21 @@ describe('Womptron Bot', () => {
         text: expect.any(String),
         media: { media_ids: [mockMediaId] },
       });
+    });
+  });
+
+  describe('runOnce', () => {
+    test('should return 0 and post nothing when there are no new womps', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: jest.fn().mockResolvedValue({ success: true, womps: [] }),
+      } as any);
+
+      const { runOnce } = require('../src/index');
+      const posted = await runOnce();
+
+      expect(posted).toBe(0);
+      expect(mockTwitterClient.v2.tweet).not.toHaveBeenCalled();
     });
   });
 

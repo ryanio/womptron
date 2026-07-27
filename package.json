@@ -5,13 +5,13 @@
   "author": "Ryan Ghods <ryan@ryanio.com>",
   "license": "MIT",
   "engines": {
-    "node": ">18"
+    "node": ">=22"
   },
   "scripts": {
     "postinstall": "yarn build",
     "build": "npx tsc",
-    "start": "NODE_OPTIONS=--max-http-header-size=16384 node dist/index.js",
-    "start:dev": "NODE_OPTIONS=--max-http-header-size=16384 ts-node src/index.ts",
+    "start": "node dist/index.js",
+    "start:dev": "ts-node src/index.ts",
     "test": "jest",
     "test:ci": "jest --ci --coverage --watchAll=false --maxWorkers=50%",
     "test:coverage": "jest --coverage --maxWorkers=50%",
@@ -21,8 +21,6 @@
   },
   "dependencies": {
     "dotenv": "^17.4.2",
-    "file-api": "^0.10.4",
-    "node-fetch": "^2.6.7",
     "twitter-api-v2": "^1.17.2"
   },
   "devDependencies": {

@@ -2,9 +2,12 @@
   "include": ["src/*.ts"],
   "compilerOptions": {
     "module": "commonjs",
-    "target": "es2020",
+    "moduleResolution": "node",
+    "target": "es2023",
+    "lib": ["es2023"],
     "esModuleInterop": true,
     "outDir": "dist",
-    "strictNullChecks": true
+    "strict": true,
+    "skipLibCheck": true
   }
 }

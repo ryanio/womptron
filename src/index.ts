@@ -1,11 +1,24 @@
-// Loads .env before anything reads process.env. On the old droplet the
-// environment came from /etc/profile via bot-runner, so there was nothing to
-// load; running this anywhere else needs a real file.
+// Loads .env before anything reads process.env, for local runs. In CI the
+// values come from the workflow's env block.
 import 'dotenv/config';
-import fetch from 'node-fetch';
 import { type EUploadMimeType, TwitterApi } from 'twitter-api-v2';
 import { logger } from './logger';
 import { shortAddr, timeout, truncate } from './util';
+
+/** A womp as the Voxels API returns it, before normalisation. */
+type ApiWomp = {
+  id: number;
+  created_at: string;
+  coords: string;
+  image_url: string;
+  author: string;
+  author_name?: string | null;
+  content?: string | null;
+  parcel_name?: string | null;
+  parcel_address?: string | null;
+};
+
+type WompsApiResponse = { womps?: ApiWomp[] };
 
 export type Womp = {
   id: number;
@@ -24,7 +37,15 @@ const {
   TWITTER_ACCESS_TOKEN_SECRET,
 } = process.env;
 
-const WOMPTRON_INTERVAL = Number(process.env.WOMPTRON_INTERVAL ?? 60);
+/**
+ * Dedupe window, in seconds. There is no persistent record of what has been
+ * posted, so each run tweets womps created in the last WOMPTRON_INTERVAL
+ * seconds. It MUST match the cron period in .github/workflows/tweet.yml
+ * (15 minutes = 900). Too small and womps fall through the gap between runs;
+ * too large and consecutive runs overlap and re-post, and every duplicate is a
+ * billed request.
+ */
+const WOMPTRON_INTERVAL = Number(process.env.WOMPTRON_INTERVAL ?? 900);
 const MILLISECONDS_PER_SECOND = 1000;
 const TWEET_DELAY_MS = 2000;
 
@@ -51,21 +72,6 @@ const COST_PER_TWEET_USD = WOMPTRON_INCLUDE_URL ? 0.2 : 0.015;
 const WOMPTRON_MAX_TWEETS_PER_RUN = Number(
   process.env.WOMPTRON_MAX_TWEETS_PER_RUN ?? 5
 );
-
-/**
- * One-shot mode, for running under a scheduler instead of as a daemon.
- *
- * The default behaviour is a resident process on a setInterval, which is what
- * the droplet ran. Under a scheduler (GitHub Actions cron and the like) the
- * process has to do one pass and exit, or the job hangs until it is killed.
- *
- * Set WOMPTRON_INTERVAL to match the scheduler's period when using this, since
- * the interval doubles as the dedupe window: each pass keeps womps created in
- * the last WOMPTRON_INTERVAL seconds. A 15 minute cron wants 900. Too small and
- * womps fall through the gap between runs; too large and the overlap re-posts
- * womps that were already tweeted, and every duplicate is a billed request.
- */
-const WOMPTRON_RUN_ONCE = process.env.WOMPTRON_RUN_ONCE === 'true';
 
 // Create a function to get the client so it can be mocked in tests
 export const getTwitterClient = () => {
@@ -131,8 +137,8 @@ export const tweetWomp = async (womp: Womp, twitterClient = client) => {
       );
     }
 
-    // Upload image directly from response buffer
-    const imageBuffer = await response.buffer();
+    // Upload image directly from the response body
+    const imageBuffer = Buffer.from(await response.arrayBuffer());
 
     // Get content type from response headers, fallback to image/jpeg
     const contentType = response.headers.get('content-type') || 'image/jpeg';
@@ -181,8 +187,8 @@ export const getWomps = async (): Promise<Womp[]> => {
       return [];
     }
 
-    const result = await response.json();
-    let { womps } = result;
+    const result = (await response.json()) as WompsApiResponse;
+    const { womps } = result;
 
     if (!womps || womps.length === 0) {
       logger.error('No womps returned');
@@ -190,17 +196,13 @@ export const getWomps = async (): Promise<Womp[]> => {
       return [];
     }
 
-    // Keep only womps created since the last tick. This is the whole dedupe
-    // story: there is no persistent record of what has already been posted.
-    // Two known consequences, both of which cost real money because every
-    // post is a billed request:
-    //   1. A restart re-tweets everything from the last WOMPTRON_INTERVAL
-    //      seconds, since the fresh process has no memory of the previous run.
-    //   2. A tick that runs slow (image fetch, upload, or the TWEET_DELAY_MS
-    //      spacing) can overlap the next one and double-post the overlap.
-    // Fixing this properly means persisting the last posted womp id somewhere
-    // that survives a restart. Until then, expect the occasional duplicate.
-    womps = womps
+    // Keep only womps created within the dedupe window. This is the whole
+    // dedupe story: nothing records what has already been posted, so a rerun
+    // of the same period re-tweets it, and every duplicate is a billed
+    // request. Fixing that properly means persisting the last posted womp id
+    // somewhere that survives the job. Until then, expect the occasional
+    // duplicate.
+    const recent = womps
       .filter(
         (w) =>
           new Date(w.created_at).getTime() >
@@ -208,7 +210,7 @@ export const getWomps = async (): Promise<Womp[]> => {
       )
       .reverse();
 
-    womps = womps.map((womp) => {
+    return recent.map((womp): Womp => {
       const { id, image_url: imgSrc, coords } = womp;
       const author = womp.author_name ?? shortAddr(womp.author);
       const playUrl = `https://voxels.com/play?coords=${coords}`;
@@ -227,8 +229,6 @@ export const getWomps = async (): Promise<Womp[]> => {
 
       return { id, content, location, coords, author, playUrl, imgSrc };
     });
-
-    return womps;
   } catch (error) {
     const errorMessage =
       error instanceof Error
@@ -266,70 +266,11 @@ export const applyTweetCap = (queue: Womp[]) => {
   return queue;
 };
 
-export function main() {
-  let tweeting = false;
-  const wompsToTweet: Womp[] = [];
-
-  const run = async () => {
-    const womps = await getWomps();
-    if (!womps) {
-      return;
-    }
-    logger.info(`Found ${womps.length} new womps`);
-    wompsToTweet.push(...womps);
-    if (wompsToTweet.length > 0) {
-      logger.info(`Tweet queue: ${wompsToTweet.length} womps`);
-    }
-    // Fire and forget async function
-    tweetWomps();
-  };
-
-  const tweetWomps = async () => {
-    // Prevent concurrent tweeting operations
-    // biome-ignore lint/nursery/noUnnecessaryConditions: This is a semaphore pattern
-    if (tweeting) {
-      return;
-    }
-    tweeting = true;
-
-    try {
-      applyTweetCap(wompsToTweet);
-
-      while (wompsToTweet.length > 0) {
-        const womp = wompsToTweet.shift();
-        if (womp) {
-          await tweetWomp(womp);
-          await timeout(TWEET_DELAY_MS);
-        }
-      }
-    } finally {
-      tweeting = false;
-    }
-  };
-
-  run();
-
-  const interval = setInterval(
-    run.bind(this),
-    WOMPTRON_INTERVAL * MILLISECONDS_PER_SECOND
-  );
-
-  process.on('SIGINT', () => {
-    logger.info('Caught interrupt signal. Stopping...');
-    clearInterval(interval);
-    process.exit();
-  });
-
-  return interval;
-}
-
 /**
  * One pass: fetch, cap, tweet, resolve. Returns how many were posted.
  *
- * This is `main`'s run plus tweet loop, minus the timer and the semaphore.
- * `main` fires `tweetWomps` without awaiting it, which is fine for a daemon and
- * wrong for a scheduler: the process would exit mid-queue with tweets still in
- * flight. Here every send is awaited before the promise settles.
+ * Every send is awaited before the promise settles, so the process never exits
+ * with tweets still in flight.
  */
 export async function runOnce(): Promise<number> {
   const queue = await getWomps();
@@ -361,17 +302,13 @@ export async function runOnce(): Promise<number> {
 
 // Only run if this file is executed directly (not imported in tests)
 if (require.main === module) {
-  if (WOMPTRON_RUN_ONCE) {
-    runOnce()
-      .then((posted) => {
-        logger.info(`Run complete, ${posted} tweeted`);
-        process.exit(0);
-      })
-      .catch((error: unknown) => {
-        logger.error(`Run failed: ${String(error)}`);
-        process.exit(1);
-      });
-  } else {
-    main();
-  }
+  runOnce()
+    .then((posted) => {
+      logger.info(`Run complete, ${posted} tweeted`);
+      process.exit(0);
+    })
+    .catch((error: unknown) => {
+      logger.error(`Run failed: ${String(error)}`);
+      process.exit(1);
+    });
 }

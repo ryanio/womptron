@@ -1,6 +1,11 @@
 # womptron
 
-Welcome to the repository for [@womptron](https://twitter.com/womptron)!
+Welcome to the repository for [@womptron](https://x.com/womptron)!
+
+The bot runs as a scheduled GitHub Actions job. `.github/workflows/tweet.yml`
+fires every 15 minutes, does one pass over the Voxels womps API, posts anything
+new, and exits. There is no long-running process and no server. Node 22+ is the
+only supported runtime; the bot uses the platform's global `fetch`.
 
 ## Environment Variables
 
@@ -13,9 +18,9 @@ Create an application in the [Twitter Developer Platform](https://developer.twit
 
 ### Optional Configuration
 
-- `WOMPTRON_INTERVAL` - Interval in seconds to check for new womps (default: 60)
+- `WOMPTRON_INTERVAL` - Dedupe window in seconds; each run posts womps created within it (default: 900). Must match the workflow's cron period.
 - `WOMPTRON_INCLUDE_URL` - Append the Voxels play link to each post (default: `false`). See the cost note below before turning this on.
-- `WOMPTRON_MAX_TWEETS_PER_RUN` - Ceiling on posts per tick (default: 5)
+- `WOMPTRON_MAX_TWEETS_PER_RUN` - Ceiling on posts per run (default: 5)
 - `LOG_LEVEL` - Logging level: `ERROR`, `WARN`, `INFO`, or `DEBUG` (default: `INFO`)
 
 ## API cost
@@ -43,9 +48,9 @@ bot posts the newest N, then logs how many it skipped, their ids, and the
 estimated cost avoided.
 
 Neither of these fixes the duplicate-post case: dedupe is purely time based with
-no persistent state, so a restart re-posts anything from the last
-`WOMPTRON_INTERVAL` seconds and each duplicate is a real charge. See the comment
-in `getWomps` for details.
+no persistent state, so a re-run over the same period re-posts anything from the
+last `WOMPTRON_INTERVAL` seconds and each duplicate is a real charge. See the
+comment in `getWomps` for details.
 
 ### Logging
 
@@ -58,6 +63,14 @@ Womptron uses a structured logging system with different levels:
 
 Set `LOG_LEVEL=DEBUG` to see detailed API responses and debugging information.
 
-## Run
+## Run locally
 
-`yarn start`
+Put the Twitter credentials in a `.env` file, then:
+
+```
+yarn install
+yarn start
+```
+
+That does a single pass and exits, the same thing the scheduled job does.
+`yarn start:dev` runs the TypeScript source directly through ts-node.
